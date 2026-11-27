@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Module>
+  <Name value="CirithSim"/>
+  <Id value="CirithSim"/>
+  <Version value="v1.0.0"/>
+  <SingleplayerModule value="true"/>
+  <MultiplayerModule value="false"/>
+  <DependedModules>
+    <DependedModule Id="Native"/>
+    <DependedModule Id="SandBoxCore"/>
+    <DependedModule Id="CustomBattle"/>
+  </DependedModules>
+  <SubModules>
+    <SubModule>
+      <Name value="CirithSim"/>
+      <DLLName value="CirithSim.dll"/>
+      <SubModuleClassType value="CirithSim.SimSubModule"/>
+      <Tags><Tag key="DedicatedServerType" value="none"/></Tags>
+    </SubModule>
+  </SubModules>
+  <Xmls>
+    <XmlNode>
+      <XmlName id="NPCCharacters" path="cirith_chars"/>
+      <IncludedGameTypes><GameType value="CustomGame"/><GameType value="EditorGame"/></IncludedGameTypes>
+    </XmlNode>
+    <XmlNode>
+      <XmlName id="Items" path="cirith_items"/>
+      <IncludedGameTypes><GameType value="CustomGame"/><GameType value="EditorGame"/></IncludedGameTypes>
+    </XmlNode>
+  </Xmls>
+</Module>

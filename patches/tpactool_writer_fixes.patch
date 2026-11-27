@@ -1,0 +1,189 @@
+diff --git a/TpacTool.Lib/Material/Material.cs b/TpacTool.Lib/Material/Material.cs
+index 06671ce..b1a476e 100644
+--- a/TpacTool.Lib/Material/Material.cs
++++ b/TpacTool.Lib/Material/Material.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using System.Collections.Generic;
+ using System.IO;
+ using System.Numerics;
+@@ -60,11 +60,31 @@ namespace TpacTool.Lib
+ 			ExtraMaterialSettings = new ExtraMaterialSetting();
+ 		}
+ 
++		private uint _metaVersion = 1, _subVersion = 2;
++
++		public override void WriteMetadata(BinaryWriter stream)
++		{
++			stream.Write(_metaVersion);
++			stream.Write(BillboardGuid);
++			stream.Write(_subVersion);
++			stream.Write(UnknownUint1);
++			stream.WriteStringList(Flags);
++			stream.Write(UnknownUint2);
++			stream.WriteStringList(VertexLayoutFlags);
++			stream.WriteSizedString(BlendMode);
++			stream.Write(Shader.Guid);
++			stream.Write(Textures.Count);
++			foreach (var kv in Textures) { stream.Write(kv.Key); stream.Write(kv.Value.Guid); }
++			stream.Write(AlphaTest);
++			stream.WriteStringList(ShaderMaterialFlags);
++			ExtraMaterialSettings.Save(stream, _subVersion);
++		}
++
+ 		public override void ReadMetadata(BinaryReader stream, int totalSize)
+ 		{
+-			var version = stream.ReadUInt32();
++			var version = stream.ReadUInt32(); _metaVersion = version;
+ 			BillboardGuid = stream.ReadGuid();
+-			var subVersion = stream.ReadUInt32();
++			var subVersion = stream.ReadUInt32(); _subVersion = subVersion;
+ 			UnknownUint1 = stream.ReadUInt32();
+ 			Flags = stream.ReadStringList();
+ 			UnknownUint2 = stream.ReadUInt32();
+@@ -122,6 +142,16 @@ namespace TpacTool.Lib
+ 				ExposureCompensation = 1f;
+ 			}
+ 
++			internal void Save(BinaryWriter stream, uint subVersion)
++			{
++				stream.Write(AreamapScale); stream.Write(AreamapAmount); stream.Write(DetailnormalScale); stream.Write(NormalmapPower);
++				stream.Write(MeshVectorArgument); stream.Write(MeshVectorArgument2); stream.Write(MeshFactorColorMultiplier); stream.Write(MeshFactor2ColorMultiplier);
++				stream.Write(RenderOrder); stream.Write(MipmapBias); stream.Write(SpecularCoef); stream.Write(GlossCoef); stream.Write(ParallaxAmount);
++				if (subVersion >= 1) stream.Write(ParallaxOffset);
++				stream.Write(AmbientOcclusionCoef);
++				if (subVersion >= 2) stream.Write(ExposureCompensation);
++			}
++
+ 			internal void Load(BinaryReader stream, uint subVersion = 2)
+ 			{
+ 				AreamapScale = stream.ReadSingle();
+diff --git a/TpacTool.Lib/Model/AbstractMeshData.cs b/TpacTool.Lib/Model/AbstractMeshData.cs
+index 180b6b4..5fb38b8 100644
+--- a/TpacTool.Lib/Model/AbstractMeshData.cs
++++ b/TpacTool.Lib/Model/AbstractMeshData.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using System.Globalization;
+ using System.IO;
+ using System.Runtime.InteropServices;
+@@ -85,6 +85,19 @@ namespace TpacTool.Lib
+ 			return array;
+ 		}
+ 
++		protected static void WriteStructArrayRaw<T>(BinaryWriter stream, T[] data) where T : struct
++		{
++			int size = data.Length * GetStructSize<T>();
++			var array = new byte[size];
++			if (size > 0)
++			{
++				var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
++				Marshal.Copy(handle.AddrOfPinnedObject(), array, 0, size);
++				handle.Free();
++			}
++			stream.Write(array);
++		}
++
+ 		protected static void WriteStructArray<T>(BinaryWriter stream, T[] data) where T : struct
+ 		{
+ 			int unitSize = GetStructSize<T>();
+diff --git a/TpacTool.Lib/Model/VertexStreamData.cs b/TpacTool.Lib/Model/VertexStreamData.cs
+index 0ed5dab..bfbc26e 100644
+--- a/TpacTool.Lib/Model/VertexStreamData.cs
++++ b/TpacTool.Lib/Model/VertexStreamData.cs
+@@ -1,4 +1,4 @@
+-﻿using System;
++using System;
+ using System.Collections.Generic;
+ using System.Globalization;
+ using System.IO;
+@@ -103,7 +103,7 @@ namespace TpacTool.Lib
+ 			stream.Write(Indices.Length);
+ 			if (Indices.Length >= UInt16.MaxValue)
+ 			{
+-				WriteStructArray(stream, Indices);
++				WriteStructArrayRaw(stream, Indices);
+ 				userdata[KEY_IS_32BIT_INDEX] = true;
+ 			}
+ 			else
+@@ -115,7 +115,7 @@ namespace TpacTool.Lib
+ 				userdata[KEY_IS_32BIT_INDEX] = false;
+ 			}
+ 			bool hasQTangent = HasUserdataTag(userdata, KEY_HAS_QTANGENT);
+-			ulong length = 0;
++			ulong length = (ulong)((hasQTangent ? 28 : 26) * 8); // offsets are relative to the start of this table, which itself is the first thing in the block
+ 			for (int i = 0, j = hasQTangent ? 14 : 13; i < j; i++)
+ 			{
+ 				int size = 0;
+@@ -142,21 +142,21 @@ namespace TpacTool.Lib
+ 				length += (ulong) size;
+ 			}
+ 
+-			WriteStructArray(stream, Colors1);
+-			WriteStructArray(stream, Colors2);
+-			WriteStructArray(stream, Uv1);
+-			WriteStructArray(stream, Uv2);
+-			WriteStructArray(stream, Positions);
+-			WriteStructArray(stream, UnknownAnotherPositions);
+-			WriteStructArray(stream, Normals);
+-			WriteStructArray(stream, Tangents);
+-			WriteStructArray(stream, BoneWeights);
+-			WriteStructArray(stream, BoneIndices);
+-			WriteStructArray(stream, CompressedNormals);
+-			WriteStructArray(stream, CompressedPositions);
+-			WriteStructArray(stream, CompressedTangents);
++			WriteStructArrayRaw(stream, Colors1);
++			WriteStructArrayRaw(stream, Colors2);
++			WriteStructArrayRaw(stream, Uv1);
++			WriteStructArrayRaw(stream, Uv2);
++			WriteStructArrayRaw(stream, Positions);
++			WriteStructArrayRaw(stream, UnknownAnotherPositions);
++			WriteStructArrayRaw(stream, Normals);
++			WriteStructArrayRaw(stream, Tangents);
++			WriteStructArrayRaw(stream, BoneWeights);
++			WriteStructArrayRaw(stream, BoneIndices);
++			WriteStructArrayRaw(stream, CompressedNormals);
++			WriteStructArrayRaw(stream, CompressedPositions);
++			WriteStructArrayRaw(stream, CompressedTangents);
+ 			if (hasQTangent)
+-				WriteStructArray(stream, TangentTransform);
++				WriteStructArrayRaw(stream, TangentTransform);
+ 		}
+ 
+ 		[StructLayout(LayoutKind.Sequential)]
+diff --git a/TpacTool.Lib/Package/AssetManager.cs b/TpacTool.Lib/Package/AssetManager.cs
+index b428d6f..66404a9 100644
+--- a/TpacTool.Lib/Package/AssetManager.cs
++++ b/TpacTool.Lib/Package/AssetManager.cs
+@@ -125,7 +125,8 @@ namespace TpacTool.Lib
+ 					InterruptLoading();
+ 					return;
+ 				}
+-				var package = new AssetPackage(file.FullName);
++				AssetPackage package;
++				try { package = new AssetPackage(file.FullName); } catch (Exception ex) { Console.Error.WriteLine("SKIP " + file.Name + ": " + ex.Message); continue; }
+ 				package.IsGuidLocked = true;
+ 				_loadedPackages.Add(package);
+ 				_packageLookup[package.Guid] = package;
+diff --git a/TpacTool.Lib/Package/AssetPackage.cs b/TpacTool.Lib/Package/AssetPackage.cs
+index 3884cd1..a0542d3 100644
+--- a/TpacTool.Lib/Package/AssetPackage.cs
++++ b/TpacTool.Lib/Package/AssetPackage.cs
+@@ -142,11 +142,13 @@ namespace TpacTool.Lib
+ 
+ 				var metadataSize = stream.ReadUInt64();
+ 				stream.RecordPosition();
+-				assetItem.ReadMetadata(stream, (int)metadataSize);
+-				stream.AssertLength((long)metadataSize);
++				long mdStart = stream.BaseStream.Position;
++				try { assetItem.ReadMetadata(stream, (int)metadataSize); } catch (Exception ex) { Console.Error.WriteLine("MDFAIL " + File.Name + " " + assetItem.GetType().Name + " " + assetItem.Name + ": " + ex.Message); }
++				stream.BaseStream.Position = mdStart + (long)metadataSize;
+ 				var unknownMetadataChecknum = stream.ReadInt64();
+ 
+ 				var dataSegmentNum = stream.ReadInt32();
++				if (Environment.GetEnvironmentVariable("TPDBG") != null) Console.Error.WriteLine("ITEM " + i + " " + assetItem.GetType().Name + " " + assetItem.Name + " mdsize=" + metadataSize + " segs=" + dataSegmentNum + " pos=" + stream.BaseStream.Position);
+ 				var segments = new AbstractExternalLoader[dataSegmentNum];
+ 				for (int j = 0; j < dataSegmentNum; j++)
+ 				{

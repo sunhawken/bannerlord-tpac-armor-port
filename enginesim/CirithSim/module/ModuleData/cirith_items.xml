@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Items>
+  <Item id="cirith_body" name="Cirith Armor" mesh="cirith_body_armor" culture="Culture.vlandia" subtype="body_armor" weight="5" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="20" leg_armor="0" arm_armor="0" covers_body="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_legs" name="Cirith Greaves" mesh="cirith_legs_armor" culture="Culture.vlandia" subtype="leg_armor" weight="2" difficulty="0" appearance="1" Type="LegArmor">
+    <ItemComponent><Armor leg_armor="10" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_hands" name="Cirith Gauntlets" mesh="cirith_hands_armor" culture="Culture.vlandia" subtype="hand_armor" weight="1" difficulty="0" appearance="1" Type="HandArmor">
+    <ItemComponent><Armor arm_armor="5" covers_hands="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_head" name="Cirith Hair" mesh="cirith_head_armor" culture="Culture.vlandia" subtype="head_armor" weight="1" difficulty="0" appearance="1" Type="HeadArmor">
+    <ItemComponent><Armor head_armor="5" covers_head="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+</Items>

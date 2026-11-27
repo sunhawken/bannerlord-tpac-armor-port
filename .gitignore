@@ -1,0 +1,9 @@
+bin/
+obj/
+*.tpac
+*.png
+*.bmp
+*.dxt1
+*.dxt5
+*.glb
+slots.bin
