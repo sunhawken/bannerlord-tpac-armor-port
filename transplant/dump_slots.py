@@ -202,6 +202,37 @@ def merged(n):
         d['jnt'] = np.concatenate([d['jnt'], np.array(J)]); d['wgt'] = np.concatenate([d['wgt'], np.array(Wt, dtype=d['wgt'].dtype)]); d['idx'] = np.concatenate([d['idx'], np.array(F)]); d['al'] = np.concatenate([d['al'], np.full(len(P), 255, np.uint8)])
     return d
 slots = [(n, merged(n)) for n in ('cirith_body_armor', 'cirith_legs_armor', 'cirith_hands_armor', 'cirith_head_armor')]
+
+# ---- SPARE-BONE JIGGLE RIG (driven by the CirithSim DLL): l_finger0 = both breasts, l_toe0/r_toe0 = glutes (L/R), r_finger0 = ponytail.
+# Her meshes do not use the finger0 bones; the boots/legs used toe0, so toe0 -> foot first. Each cloth-alpha vertex gets spare-bone weight = alpha / alpha_max,
+# its other influences are scaled by (1 - that); the weakest of the 4 slots is replaced by the spare bone.
+def _spare(d, bone_ids, sa):
+    jnt = d['jnt'].astype(np.int64).copy(); wgt = d['wgt'].astype(np.float64).copy()
+    for i in np.where(sa > 0.004)[0]:
+        b = bone_ids[i] if hasattr(bone_ids, '__len__') else bone_ids
+        if b < 0: continue
+        a = float(min(sa[i], 1.0)); k = int(np.argmin(wgt[i])); wgt[i, k] = 0; wgt[i] /= max(wgt[i].sum(), 1e-9); wgt[i] *= (1 - a); jnt[i, k] = b; wgt[i, k] = a
+    d['jnt'] = jnt; d['wgt'] = wgt
+def _nearest_alpha(src_pos, src_a, dst_pos, maxd=0.02):
+    from scipy.spatial import cKDTree
+    t = cKDTree(src_pos[src_a > 0]); dist, ix = t.query(dst_pos); a = src_a[src_a > 0][ix]; return np.where(dist < maxd, a, 0.0)
+NB = {n: _names.index(n) for n in ('l_finger0', 'r_finger0', 'l_toe0', 'r_toe0', 'l_foot', 'r_foot')}
+if __import__('os').environ.get('NOSPARE') != '1':
+    for n, d in slots:
+        if n in ('cirith_legs_armor',):
+            for t_, f_ in (('l_toe0', 'l_foot'), ('r_toe0', 'r_foot')): d['jnt'] = np.where(d['jnt'] == NB[t_], NB[f_], d['jnt'])
+        if n == 'cirith_body_armor':
+            N0 = len(prims[n]['pos']); al = d['al'].astype(np.float64); sa = np.zeros(len(d['pos'])); sa[:N0] = np.clip(al[:N0] / 96.0, 0, 1)
+            sa[N0:] = _nearest_alpha(d['pos'][:N0], sa[:N0], d['pos'][N0:])          # trim (gems...) follows the nearest cloth vertex
+            z = d['pos'][:, 2]; x = d['pos'][:, 0]
+            br = np.where(z > 1.15, NB['l_finger0'], np.where(x > 0, NB['r_toe0'], NB['l_toe0']))   # breasts z>1.15, glutes below (r = +x)
+            br = np.where((z > 1.15) | (z < 1.1), br, -1)
+            _spare(d, br, sa); print('  spare rig body: verts with spare weight', int((sa > 0.004).sum()))
+        if n == 'cirith_head_armor':
+            al = d['al'].astype(np.float64); sa = np.clip(al / al.max(), 0, 1); _spare(d, NB['r_finger0'], sa); print('  spare rig head (ponytail):', int((sa > 0.004).sum()))
+            # pivot/length of the ponytail for the DLL (same formula as hang_ponytail)
+            m = (d['pos'][:, 2] > 1.78) & (d['pos'][:, 1] < -0.015); root = np.array([0.0, d['pos'][m][:, 1].max(), d['pos'][m][:, 2].min()])
+            open('../enginesim/CirithSim/module/ModuleData/cirith_spare.txt', 'w').write(f"pivot {root[0]:.5f} {root[1]:.5f} {root[2]:.5f}" + chr(10))
 with open('out_rig/slots.bin', 'wb') as f:
     sk = g.j['skins'][0]; jn = [g.j['nodes'][i]['name'] for i in sk['joints']]
     f.write(struct.pack('<i', len(slots)))

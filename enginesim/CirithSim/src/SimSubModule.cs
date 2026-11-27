@@ -90,6 +90,7 @@ namespace CirithSim
 
 
         // ---- bone-control probe: CIRITH_BONETEST="name:dx,dy,dz" lifts that bone (model space, relative to its CURRENT animated frame) every tick, to learn whether SetBoneLocalFrame sticks to the render
+        Jiggle jig = new Jiggle(); bool jigErr;
         int boneTestIdx = -2;
         void BoneTest()
         {
@@ -207,6 +208,7 @@ namespace CirithSim
             {
                 if (me == null) me = Mission.Current.Agents.FirstOrDefault(a => a.Character != null && a.Character.StringId == SimSubModule.Target);
                 if (me != null) BoneTest();
+                if (me != null) { try { jig.Update(me, dt); } catch (Exception je) { if (!jigErr) { jigErr = true; SimSubModule.L("jiggle err " + je); } } }
                 if (me != null && MotionTick(dt)) return;
                 if (me != null && ViewQueueTick(dt)) return;
                 if (me != null && !camSet && t > 3f)
