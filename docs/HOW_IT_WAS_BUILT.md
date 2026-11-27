@@ -158,7 +158,7 @@ Large generated inputs (`game_mesh.json`, `game_atlas.png`, `cirith_armor_rigged
 * Engine animation assets cannot be added by a module: combat uses the engine's own animations.
 * Jiggle amplitudes are hand-tuned; no positive-control comparison against vanilla cloth was done for the DLL rig.
 * Enemy NPC armor appears black in the sim (pre-existing, not investigated).
-* The sprint key uses `Input.IsKeyDown(V)`; G / Ctrl+G are polled the same way. They were driven by overrides in tests and confirmed working in a live visible run by the user for the sword, but not every key path was exercised headless.
+* The sprint key (C) uses `Input.IsKeyDown`; G / Ctrl+G are polled the same way. They were driven by overrides in tests and confirmed working in a live visible run by the user for the sword, but not every key path was exercised headless.
 
 ## 8. Quick start
 ```
