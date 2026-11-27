@@ -1,6 +1,6 @@
 {
  "version": 3,
- "note": "version 3",
+ "note": "made on the exact game mesh (carried from a version 2 file)",
  "clips": {
   "idle": {
    "pos": [
@@ -12,35 +12,13 @@
     -19.2,
     0.2,
     -1.1
-   ],
-   "adj": [
-    {
-     "bone": "r_hand",
-     "rot": [
-      -8.8,
-      -14.5,
-      -63
-     ],
-     "center": -1,
-     "width": 12
-    },
-    {
-     "bone": "r_foretwist",
-     "rot": [
-      0,
-      0,
-      30
-     ],
-     "center": 40,
-     "width": 30
-    }
    ]
   },
   "walk": {
    "pos": [
     -3.1,
-    1.4,
-    -0.3
+    1.38,
+    -0.33
    ],
    "rot": [
     -19.2,
@@ -62,9 +40,9 @@
   },
   "sprint": {
    "pos": [
-    -5,
-    2.3,
-    -0.8
+    -5.01,
+    2.29,
+    -0.84
    ],
    "rot": [
     -19.2,
