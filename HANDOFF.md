@@ -56,3 +56,6 @@ Areola decal geometry experiments were ABANDONED on request (code kept behind en
 
 ## UPDATE 2026-11-26 (areola fix)
 Areola was painted at atlas (218,76) = vertices at y=-0.075 = her BACK (front is +y; the old session assumed -y). Moved to the front breast UV island (138,115), radii 12x9.5 px (gem_mask.py). Verified front/back with enginesimiews_areola.txt (CIRITH_VIEWS; target height is metres above feet, use 1.3 for chest). Nipple apex triangles have degenerate UVs (41-76,221-253, shared with other geometry) so the very tip is not painted.
+
+## UPDATE 2026-11-26 (seamless arms/chest)
+Cause: only the torso skin block of the atlas got the gamma lift (lum ~89); the arm/shoulder skin islands stayed at ~62 -> tone step at the shoulder, plus black island borders bleeding in at UV seams. Fix in transplant/gem_mask.py: same gamma lift on arm skin texels (arm triangles outside the torso block), 4 px skin gutter padding, and enginesim/seam_fix.py (repaints dark-grey texels at UV-seam edges whose other side is skin). enginesim/seam_scan.py measures seam colour differences (arm-region mean diff 24 -> 9.7). Minor leftover: faint darker patch on top of the shoulders.

@@ -49,6 +49,27 @@ lifted = 255.0 * (lum[skin] / 255.0) ** 0.72; gain = lifted / lum[skin]
 for k in range(3): im[..., k][skin] = np.clip(im[..., k][skin] * gain, 0, 255).astype(np.uint8)
 print('skin px lifted', int(skin.sum()))
 
+# ---- seamless arms: the arm/shoulder skin islands were NOT lifted (lum ~62 vs torso ~89 -> visible tone step at the shoulder). Same gamma on the skin pixels of every body triangle outside the torso block,
+# then pad the lifted skin colour 4 px into the black gutter so bilinear/mip/edge samples never pull in black (dark seam lines).
+sys.path.insert(0, '../enginesim'); from skin_islands import raster
+cz_ = p[f][:, :, 2].mean(1); cx_ = np.abs(p[f][:, :, 0]).mean(1)
+arm_tris = f[(cx_ > 0.17) & (cz_ > 1.2)]
+arm_m = raster(arm_tris, uv, H, W)
+skin2 = arm_m & ~sk & ((mx - mn) < 22) & (lum < 150) & (lum > 18) & (im[..., 3] > 0)
+lift2 = 255.0 * (lum[skin2] / 255.0) ** 0.72; gain2 = lift2 / lum[skin2]
+for k in range(3): im[..., k][skin2] = np.clip(im[..., k][skin2] * gain2, 0, 255).astype(np.uint8)
+print('arm skin px lifted', int(skin2.sum()))
+allm = raster(f, uv, H, W)
+lum2 = im[..., :3].astype(int).sum(2) / 3.0; sat2 = im[..., :3].max(2).astype(int) - im[..., :3].min(2).astype(int)
+sk_all = (skin | skin2) & (sat2 < 22) & (lum2 > 40)
+dist, (iy, ix) = ndi.distance_transform_edt(~sk_all, return_indices=True)
+gut = (~allm) & (dist <= 4) & (lum2 < 14) & (im[..., 3] > 0)
+for k in range(3): im[..., k][gut] = im[..., k][iy[gut], ix[gut]]
+print('gutter px padded with skin', int(gut.sum()))
+from seam_fix import fix as _seamfix
+im[..., :3], _nf = _seamfix(im, p, uv.astype(float), f)[0][..., :3], 0
+print('seam-edge dark texels repainted (see seam_fix.py)')
+
 # ---- very dark, bigger areolas. Both breasts share one UV spot (the body UVs are mirrored): the front-most breast vertex sits at atlas px (218,76).
 # measured texel density there: 0.36 cm/px along u, 0.30 cm/px along v -> an areola ~6.5 cm across = ellipse radii ~9 x 11 px. Detail comes from the Venice swatch if present.
 import os
