@@ -98,7 +98,7 @@ namespace CirithSim
 
 
         // ---- bone-control probe: CIRITH_BONETEST="name:dx,dy,dz" lifts that bone (model space, relative to its CURRENT animated frame) every tick, to learn whether SetBoneLocalFrame sticks to the render
-        Jiggle jig = new Jiggle(); bool jigErr, chargeErr, rosterTested;
+        Jiggle jig = new Jiggle(); bool jigErr, chargeErr, rosterTested, restLogged;
         int boneTestIdx = -2;
         void BoneTest()
         {
@@ -117,8 +117,8 @@ namespace CirithSim
 
 
 
-        // ---- weapon animation test (CIRITH_WTEST=1, character cirith_sword_test): scripted idle -> walk -> run -> sprint -> charge attack -> run -> idle -> other weapon -> back; side camera frames in shots/
-        WeaponAnim wa = new WeaponAnim(); float wt = -1; int wshot; Camera wcam; float wspeed; Vec3 wpos; bool wInit; List<string> wlog = new List<string>(); string wlast = "";
+        // ---- weapon animation test (CIRITH_WTEST=1, character cirith_sword_test): scripted idle -> walk -> run -> sprint -> run -> idle -> other weapon -> back; side camera frames in shots/
+        WeaponAnim wa = new WeaponAnim(); float wt = -1; int wshot; Camera wcam; bool wInit; string wlast = "";
         bool WTest(float dt)
         {
             if (Environment.GetEnvironmentVariable("CIRITH_WTEST") != "1") return false;
@@ -132,31 +132,21 @@ namespace CirithSim
                 typeof(MissionScreen).GetProperty("CustomCamera").SetValue(ms, wcam);
             }
             catch (Exception e) { SimSubModule.L("wtest cam err " + e.Message); }
-            if (!wInit) { wInit = true; wpos = me.Position; wa.UseOverrides = true; try { me.Controller = AgentControllerType.None; } catch { } }
-            // timeline: (until, speed m/s, sprint, attack-pulse, label)
-            string label; float spd = 0; bool sprint = false, att = false;
-            if (wt < 5f) { label = "settle"; }
-            else if (wt < 8f) { label = "idle"; }
-            else if (wt < 12f) { label = "walk"; spd = 1.5f; }
-            else if (wt < 16f) { label = "run"; spd = 3.8f; }
-            else if (wt < 20f) { label = "sprint"; spd = 5.6f; sprint = true; }
-            else if (wt < 20.1f) { label = "sprint+attack"; spd = 5.6f; sprint = true; att = true; }
-            else if (wt < 24f) { label = "charge attack"; sprint = true; spd = 0; }
-            else if (wt < 27f) { label = "run again"; spd = 3.8f; }
-            else if (wt < 30f) { label = "idle again"; }
-            else if (wt < 33f) { label = "other weapon"; }
-            else { label = "cirith again"; }
-            if (wt >= 30f && wt < 30.1f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon2, Agent.WeaponWieldActionType.Instant, false); SimSubModule.L("wtest: wielded the vanilla sword (slot 2)"); } catch (Exception e) { SimSubModule.L("wield err " + e.Message); } }
-            if (wt >= 33f && wt < 33.1f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); SimSubModule.L("wtest: wielded cirith_sword again (slot 0)"); } catch (Exception e) { SimSubModule.L("wield err " + e.Message); } }
+            if (!wInit) { wInit = true; wa.UseOverrides = true; try { me.Controller = AgentControllerType.None; } catch { } }
+            string label; float spd = 0; bool sprint = false;
+            if (wt < 5f) label = "settle"; else if (wt < 8f) label = "idle"; else if (wt < 12f) { label = "walk"; spd = 1.5f; } else if (wt < 16f) { label = "run"; spd = 3.8f; }
+            else if (wt < 20f) { label = "sprint"; spd = 5.6f; sprint = true; } else if (wt < 23f) { label = "run again"; spd = 3.8f; } else if (wt < 26f) label = "idle again";
+            else if (wt < 29f) label = "other weapon"; else label = "cirith again";
             if (wt >= 4.5f && wt < 4.6f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); } catch { } }
-            wa.SprintHeldOverride = sprint; wa.AttackPressedOverride = att;
+            if (wt >= 26f && wt < 26.1f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon2, Agent.WeaponWieldActionType.Instant, false); } catch (Exception e) { SimSubModule.L("wield err " + e.Message); } }
+            if (wt >= 29f && wt < 29.1f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); } catch (Exception e) { SimSubModule.L("wield err " + e.Message); } }
+            wa.SprintHeldOverride = sprint;
             if (spd > 0) { try { var f0 = me.LookDirection; f0.z = 0; f0.Normalize(); var np = me.Position + f0 * (spd * dt); np.z = me.Position.z; me.TeleportToPosition(np); } catch { } }
-            if (label != wlast) { wlast = label; SimSubModule.L($"wtest phase '{label}' at {wt:0.0}s; wielded={WeaponAnim.WieldedId(me, out _) ?? "other"} state={wa.Current}"); }
+            if (label != wlast) { wlast = label; SimSubModule.L($"wtest phase '{label}' at {wt:0.0}s; cirith sword wielded={WeaponAnim.IsWielding(me)} state={wa.Current}"); }
             wa.Update(me, dt);
-            // frames: 4 per phase after settle
-            float[] marks = { 6.5f, 7.8f, 9f, 10.2f, 11.5f, 13f, 14.2f, 15.5f, 17f, 18.2f, 19.5f, 20.6f, 21.3f, 22f, 22.7f, 23.4f, 25f, 26.5f, 28.5f, 29.5f, 31.5f, 32.5f, 34f };
-            if (wshot < marks.Length && wt >= marks[wshot]) { Shot($"w_{wshot:00}_{label.Replace(' ', '_').Replace('+', '_')}"); SimSubModule.L($"wtest shot {wshot} state={wa.Current} hand={(WeaponAnim.WieldedId(me, out _))}"); wshot++; }
-            if (wt > 35f) { SimSubModule.L("wtest done"); Utilities.ExitProcess(0); }
+            float[] marks = { 6.5f, 7.8f, 9f, 10.2f, 11.5f, 13f, 14.2f, 15.5f, 17f, 18.2f, 19.5f, 21f, 22.3f, 24f, 25.3f, 27f, 28.3f, 30f, 31f };
+            if (wshot < marks.Length && wt >= marks[wshot]) { Shot($"w_{wshot:00}_{label.Replace(' ', '_')}"); SimSubModule.L($"wtest shot {wshot} state={wa.Current} cirithWielded={WeaponAnim.IsWielding(me)}"); wshot++; }
+            if (wt > 32f) { SimSubModule.L("wtest done"); Utilities.ExitProcess(0); }
             return true;
         }
 
@@ -301,6 +291,11 @@ namespace CirithSim
                 if (me != null) { try { charge.Update(me, dt, ct > 10f && !cDone && Environment.GetEnvironmentVariable("CIRITH_CHARGETEST") == "1"); } catch (Exception ce) { if (!chargeErr) { chargeErr = true; SimSubModule.L("charge err " + ce); } } }
                 if (me != null && ChargeTick(dt)) { }
                 if (me != null) { try { jig.Update(me, dt); } catch (Exception je) { if (!jigErr) { jigErr = true; SimSubModule.L("jiggle err " + je); } } }
+                if (me != null && Environment.GetEnvironmentVariable("CIRITH_RESTPOSE") == "1")
+                {   // axis-probe calibration: hold the skeleton in its engine rest pose so the probe weapon's attach frame can be read from screenshots
+                    try { var rsk = me.AgentVisuals.GetSkeleton(); int rn = rsk.GetBoneCount(); if (t > 4.5f && t < 4.6f) me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); for (int bi = 0; bi < rn; bi++) rsk.SetBoneLocalFrame((sbyte)bi, rsk.GetBoneLocalRestFrame((sbyte)bi, false)); rsk.UpdateEntitialFramesFromLocalFrames(); if (Environment.GetEnvironmentVariable("CIRITH_FORCE") == "1") { rsk.ForceUpdateBoneFrames(); }
+                        if (!restLogged) { restLogged = true; var hf = rsk.GetBoneEntitialRestFrame(19); var hr = rsk.GetBoneEntitialRestFrame(26); SimSubModule.L($"REST l_hand entitial origin {hf.origin} axes s={hf.rotation.s} f={hf.rotation.f} u={hf.rotation.u} ; r_hand origin {hr.origin} s={hr.rotation.s} f={hr.rotation.f} u={hr.rotation.u}"); } } catch (Exception re) { SimSubModule.L("restpose err " + re.Message); }
+                }
                 if (me != null && WTest(dt)) { try { jig.Update(me, dt); } catch { } return; }
                 if (me != null && Environment.GetEnvironmentVariable("CIRITH_CHARGETEST") == "1") return;
                 if (me != null && MotionTick(dt)) return;

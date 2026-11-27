@@ -1,0 +1,4 @@
+probe_front 0 0 1.8 1.1 0
+probe_side 1.5708 0 1.8 1.1 0
+probe_top 0 1.35 1.8 1.1 0
+probe_back 3.1416 0 1.8 1.1 0

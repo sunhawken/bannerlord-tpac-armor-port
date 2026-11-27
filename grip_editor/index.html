@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cirith sword grip editor</title>
+<style>
+  :root { color-scheme: dark; --bg:#14181d; --panel:#1c222a; --line:#2c3541; --fg:#e6edf3; --mut:#8b98a7; --acc:#3fb68b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.4 system-ui,Segoe UI,Arial,sans-serif; background:var(--bg); color:var(--fg); display:flex; height:100vh; overflow:hidden; }
+  #view { flex:1; position:relative; min-width:0; }
+  #view canvas { display:block; width:100%; height:100%; }
+  #hud { position:absolute; left:10px; top:8px; color:var(--mut); font-size:12px; pointer-events:none; text-shadow:0 1px 2px #000; }
+  #side { width:370px; max-width:46vw; background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; padding:12px 14px 20px; }
+  h1 { font-size:16px; margin:0 0 4px; } h2 { font-size:13px; margin:16px 0 6px; color:var(--mut); text-transform:uppercase; letter-spacing:.06em; }
+  p.help { color:var(--mut); font-size:12px; margin:2px 0 8px; }
+  .tabs, .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  button { background:#262e38; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--acc); } button.on { background:var(--acc); color:#06241a; border-color:var(--acc); font-weight:600; }
+  button.big { padding:9px 14px; font-weight:600; } button.save { background:var(--acc); color:#06241a; border-color:var(--acc); }
+  .bone { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin:8px 0; }
+  .bone b { font-size:13px; } .ax { display:grid; grid-template-columns:18px 1fr 62px; gap:8px; align-items:center; margin-top:4px; }
+  .ax label { color:var(--mut); font-size:12px; } input[type=range] { width:100%; accent-color:var(--acc); }
+  input[type=number] { width:62px; background:#10151a; color:var(--fg); border:1px solid var(--line); border-radius:5px; padding:3px 4px; font:inherit; }
+  #status { margin-top:10px; font-size:12px; color:var(--acc); min-height:18px; }
+  .chk { display:flex; gap:6px; align-items:center; color:var(--mut); font-size:12px; }
+</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/" } }</script>
+</head>
+<body>
+<div id="view"><div id="hud">drag = orbit · wheel = zoom · right-drag = pan</div></div>
+<div id="side">
+  <h1>Cirith sword grip editor</h1>
+  <p class="help">Her body plays her original animation untouched. For each pose, move and turn the <b>sword</b> in her left hand until it sits where you want it. When you are happy, press <b>Save edits</b> and send me the downloaded <code>grip_edits.json</code>.</p>
+
+  <h2>Pose</h2>
+  <div class="tabs" id="tabs"></div>
+  <div class="row" style="margin-top:8px">
+    <button id="play" class="on">Pause</button>
+    <input id="frame" type="range" min="0" max="1" value="0" step="1" style="flex:1">
+    <span id="fl" style="color:var(--mut);min-width:54px;text-align:right"></span>
+  </div>
+  <div class="row" style="margin-top:6px"><span style="color:var(--mut)">speed</span>
+    <input id="spd" type="range" min="0.1" max="1.5" value="0.5" step="0.05" style="flex:1"><span id="spdl" style="color:var(--mut);width:36px">0.5×</span></div>
+
+  <h2>View</h2>
+  <div class="row"><button data-cam="front">Front</button><button data-cam="side">Side</button><button data-cam="back">Back</button><button data-cam="close">Close on hand</button></div>
+  <div class="row" style="margin-top:6px"><label class="chk"><input type="checkbox" id="follow" checked> follow her</label>
+    <label class="chk"><input type="checkbox" id="showSword" checked> sword</label><label class="chk"><input type="checkbox" id="showBody" checked> body</label></div>
+
+  <h2>Sword for <span id="curclip"></span></h2>
+  <div id="bones"></div>
+  <div class="row" style="margin-top:8px"><button id="resetClip">Reset this pose</button><button id="copyTo">Copy to all poses</button></div>
+
+  <h2>File</h2>
+  <div class="row"><button class="big save" id="save">Save edits (grip_edits.json)</button><button id="loadBtn">Load edits…</button><input type="file" id="loadFile" accept=".json" hidden></div>
+  <div id="status"></div>
+  <p class="help" style="margin-top:14px">The sword is attached to her left hand exactly the way the game attaches it, so what you see here is what the game will show once I apply your file. Your edits are also kept in this browser automatically.</p>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const BONES = ['pelvis','l_thigh','l_calf','l_foot','l_toe0','r_thigh','r_calf','r_foot','r_toe0','spine','spine1','spine2','neck','head','l_clavicle','l_upperarm_twist','l_upperarm_twist1','l_foretwist','l_foretwist1','l_hand','l_finger0','r_clavicle','r_upperarm_twist','r_upperarm_twist1','r_foretwist','r_foretwist1','r_hand','r_finger0'];
+// per pose: pos = sword offset in cm (in her left-hand's own axes), rot = sword rotation in degrees about the sword's own axes (X = across the guard, Y = thin side, Z = along the blade)
+const SW = [['pos','Move the sword (cm)',-40,40,0.5],['rot','Turn the sword (degrees)',-180,180,1]];
+const CLIPS = [['idle','Idle'],['walk','Walk'],['run','Run'],['sprint','Sprint']];
+const KEY = 'cirithSwordEdits.v2';
+
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias:true }); renderer.setPixelRatio(devicePixelRatio); view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x14181d);
+const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 100); camera.position.set(0.5, 1.2, -3.2);
+const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 1, 0); controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.6)); const dl = new THREE.DirectionalLight(0xffffff, 2.0); dl.position.set(2, 4, -3); scene.add(dl);
+const grid = new THREE.GridHelper(6, 12, 0x3a4552, 0x252d37); scene.add(grid);
+function resize() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+let swordBase = new THREE.Matrix4(); let clipsData, gripJ, bones = {}, rest = {}, body = [], sword = null, root = null;
+let clip = 'idle', frame = 0, playing = true, speed = 0.5, acc = 0;
+let edits = {}; try { edits = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+const zero = () => ({}); for (const [c] of CLIPS) edits[c] = edits[c] || {};
+const status = (t) => { document.getElementById('status').textContent = t; };
+
+async function init() {
+  clipsData = await (await fetch('data/clips.json')).json();
+  gripJ = await (await fetch('data/grip_l.json')).json();
+  const swordJ = await (await fetch('data/sword.json')).json();
+  const gltf = await new GLTFLoader().loadAsync('data/cirith_armor_rigged.glb');
+  root = gltf.scene; scene.add(root);
+  root.traverse(o => { if (o.isBone) { bones[o.name] = o; rest[o.name] = { q: o.quaternion.clone(), p: o.position.clone() }; } if (o.isSkinnedMesh || o.isMesh) body.push(o); });
+  // her sword, attached to the left-hand bone with the same frame the game uses (axes measured in the engine, see grip_l.json)
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(swordJ.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(swordJ.nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(swordJ.uv, 2)); g.setIndex(swordJ.idx);
+  const tex = await new THREE.TextureLoader().loadAsync('data/sword.png'); tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace;
+  sword = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, metalness: 0.4, roughness: 0.5 }));
+  const X = new THREE.Vector3(...gripJ.X).normalize(), Y = new THREE.Vector3(...gripJ.Y).normalize(), Z = new THREE.Vector3(...gripJ.Z).normalize();
+  sword.matrixAutoUpdate = false; swordBase.makeBasis(X, Y, Z); sword.matrix.copy(swordBase); bones['l_hand'].add(sword);
+  buildUI(); setClip('idle'); animate();
+}
+
+function buildUI() {
+  const tabs = document.getElementById('tabs');
+  for (const [c, label] of CLIPS) { const b = document.createElement('button'); b.textContent = label; b.dataset.clip = c; b.onclick = () => setClip(c); tabs.appendChild(b); }
+  const host = document.getElementById('bones');
+  for (const [kind, label, lo, hi, st] of SW) {
+    const d = document.createElement('div'); d.className = 'bone'; d.innerHTML = `<b>${label}</b>`;
+    ['x','y','z'].forEach((ax, i) => {
+      const r = document.createElement('div'); r.className = 'ax';
+      r.innerHTML = `<label>${ax.toUpperCase()}</label><input type="range" min="${lo}" max="${hi}" step="${st}" value="0" data-k="${kind}" data-i="${i}"><input type="number" min="${lo}" max="${hi}" step="${st}" value="0" data-kn="${kind}" data-i="${i}">`;
+      d.appendChild(r);
+    });
+    host.appendChild(d);
+  }
+  host.addEventListener('input', e => {
+    const t = e.target; const kind = t.dataset.k || t.dataset.kn; if (!kind) return; const i = +t.dataset.i; const lim = SW.find(x => x[0] === kind);
+    let v = Math.max(lim[2], Math.min(lim[3], +t.value || 0));
+    const e3 = (edits[clip][kind] = edits[clip][kind] || [0, 0, 0]); e3[i] = v; syncUI(); persist(); apply();
+  });
+  document.getElementById('play').onclick = () => { playing = !playing; document.getElementById('play').textContent = playing ? 'Pause' : 'Play'; document.getElementById('play').classList.toggle('on', playing); };
+  const fr = document.getElementById('frame'); fr.oninput = () => { frame = +fr.value; playing = false; document.getElementById('play').textContent = 'Play'; document.getElementById('play').classList.remove('on'); apply(); };
+  const sp = document.getElementById('spd'); sp.oninput = () => { speed = +sp.value; document.getElementById('spdl').textContent = speed.toFixed(2).replace(/0$/, '') + '×'; };
+  document.getElementById('resetClip').onclick = () => { edits[clip] = {}; syncUI(); persist(); apply(); };
+  document.getElementById('copyTo').onclick = () => { for (const [c] of CLIPS) if (c !== clip) edits[c] = JSON.parse(JSON.stringify(edits[clip])); persist(); status('Copied this pose\'s numbers to all poses.'); };
+  document.getElementById('save').onclick = save;
+  document.getElementById('loadBtn').onclick = () => document.getElementById('loadFile').click();
+  document.getElementById('loadFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); for (const [c] of CLIPS) edits[c] = (j.clips && j.clips[c]) || {}; persist(); syncUI(); apply(); status('Loaded ' + f.name); } catch (er) { status('Could not read that file.'); } };
+  document.getElementById('showSword').onchange = e => { sword.visible = e.target.checked; };
+  document.getElementById('showBody').onchange = e => { for (const m of body) m.visible = e.target.checked; };
+  document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => cam(b.dataset.cam));
+}
+function setClip(c) {
+  clip = c; frame = 0; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.clip === c));
+  document.getElementById('curclip').textContent = CLIPS.find(x => x[0] === c)[1].toLowerCase(); document.getElementById('frame').max = clipsData.clips[c].n - 1; syncUI(); apply();
+}
+function syncUI() {
+  for (const [kind] of SW) { const e3 = edits[clip][kind] || [0, 0, 0];
+    for (let i = 0; i < 3; i++) document.querySelectorAll(`[data-k="${kind}"][data-i="${i}"], [data-kn="${kind}"][data-i="${i}"]`).forEach(el => { el.value = e3[i]; }); }
+}
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(edits)); } catch (e) {} }
+function save() {
+  const out = { version: 2, note: 'sword placement per pose: pos = offset in cm along her left-hand bone axes, rot = degrees (Euler XYZ) about the sword own axes', clips: {} };
+  for (const [c] of CLIPS) { out.clips[c] = {}; for (const [kind] of SW) { const e3 = edits[c][kind]; if (e3 && (e3[0] || e3[1] || e3[2])) out.clips[c][kind] = e3.map(Number); } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' })); a.download = 'grip_edits.json'; a.click(); URL.revokeObjectURL(a.href);
+  status('Saved grip_edits.json to your Downloads folder - send it to me.');
+}
+
+const m4 = new THREE.Matrix4(), qa = new THREE.Quaternion(), qe = new THREE.Quaternion(), eu = new THREE.Euler();
+function apply() {
+  const c = clipsData.clips[clip]; const f = Math.max(0, Math.min(c.n - 1, Math.floor(frame))); const o = f * c.nb * 9;
+  for (let i = 0; i < BONES.length; i++) {
+    const b = bones[BONES[i]]; if (!b) continue; const r = c.rot; const k = o + i * 9;
+    m4.set(r[k], r[k + 1], r[k + 2], 0, r[k + 3], r[k + 4], r[k + 5], 0, r[k + 6], r[k + 7], r[k + 8], 0, 0, 0, 0, 1); qa.setFromRotationMatrix(m4);
+    b.quaternion.copy(qa);
+  }
+  { const ed = edits[clip]; const pos = ed.pos || [0, 0, 0], rot = ed.rot || [0, 0, 0]; sword.matrix.copy(swordBase); eu.set(rot[0] * Math.PI / 180, rot[1] * Math.PI / 180, rot[2] * Math.PI / 180, 'XYZ'); sword.matrix.multiply(new THREE.Matrix4().makeRotationFromEuler(eu)); sword.matrix.setPosition(pos[0] / 100, pos[1] / 100, pos[2] / 100); sword.matrixWorldNeedsUpdate = true; }
+  const p = bones['pelvis']; p.position.copy(rest['pelvis'].p); p.position.z += c.dz[f];
+  document.getElementById('frame').value = f; document.getElementById('fl').textContent = (f + 1) + ' / ' + c.n;
+  root.updateMatrixWorld(true);
+}
+const tmp = new THREE.Vector3();
+function cam(kind) {
+  const hip = bones['pelvis'].getWorldPosition(new THREE.Vector3()); const t = new THREE.Vector3(hip.x, 1.0, hip.z); controls.target.copy(t);
+  const d = { front: [0, 0.2, -3.2], side: [3.2, 0.2, 0], back: [0, 0.2, 3.2], close: [-0.2, -0.4, -1.3] }[kind];
+  if (kind === 'close') { const h = bones['l_hand'].getWorldPosition(tmp.clone()); controls.target.copy(h); camera.position.set(h.x - 0.5, h.y + 0.1, h.z - 1.1); } else camera.position.set(t.x + d[0], t.y + d[1] + 0.3, t.z + d[2]);
+}
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate); const dt = clock.getDelta();
+  if (playing) { acc += dt * 60 * speed; while (acc >= 1) { frame = (frame + 1) % clipsData.clips[clip].n; acc -= 1; } apply(); }
+  if (document.getElementById('follow').checked) { const hip = bones['pelvis'].getWorldPosition(tmp); const dx = hip.x - controls.target.x, dz = hip.z - controls.target.z; controls.target.x += dx; controls.target.z += dz; camera.position.x += dx; camera.position.z += dz; }
+  controls.update(); renderer.render(scene, camera);
+}
+init().catch(e => { document.getElementById('hud').textContent = 'Could not load: ' + e.message + ' (open this page through "Start Grip Editor.bat", not by double-clicking the html)'; console.error(e); });
+</script>
+</body></html>

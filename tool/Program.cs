@@ -203,7 +203,7 @@ class P
         if (a[1] == "armorpack")
         {
             // armorpack <slots.bin> <out.tpac> : Cirith slot meshes (from transplant/dump_slots.py) -> new metameshes cloned from vanilla armor templates
-            var tmpl = new Dictionary<string, string> { ["cirith_sword"] = "vlandia_onehanded_sword_a", ["cirith_body_armor"] = "armor_roman_mail_shirt", ["cirith_legs_armor"] = "empire_plate_armor_boots", ["cirith_hands_armor"] = "mail_mitten_a", ["cirith_head_armor"] = "armor_merchant_helmet_a" };
+            var tmpl = new Dictionary<string, string> { ["cirith_sword"] = "vlandia_onehanded_sword_a", ["cirith_probe"] = "vlandia_onehanded_sword_a", ["cirith_sword_hidden"] = "vlandia_onehanded_sword_a", ["cirith_body_armor"] = "armor_roman_mail_shirt", ["cirith_legs_armor"] = "empire_plate_armor_boots", ["cirith_hands_armor"] = "mail_mitten_a", ["cirith_head_armor"] = "armor_merchant_helmet_a" };
             var pk = new AssetPackage(Guid.NewGuid());
             // ---- Cirith's own material + diffuse texture (flat normal / neutral spec / no team-colour from base-game defaults)
             Guid cirithMat = Guid.Empty;
@@ -305,7 +305,7 @@ class P
                   if (cp.Contains("cpos")) vs.CompressedPositions = (VertexStreamData.Half4[])tv9.CompressedPositions.Clone(); if (cp.Contains("nrm")) vs.Normals = (Vector3[])tv9.Normals.Clone(); if (cp.Contains("tt")) vs.TangentTransform = (VertexStreamData.SnormShort4[])tv9.TangentTransform.Clone(); }
                 bool faithful = a.Length > 5 && a[5] == "vtan";
                 if (faithful) { var tv = me.VertexStream.Data; vs.Colors1 = (AbstractMeshData.Color[])tv.Colors1.Clone(); vs.Colors2 = (AbstractMeshData.Color[])tv.Colors2.Clone(); vs.Uv2 = (Vector2[])tv.Uv2.Clone(); }
-                bool wpn = name.StartsWith("cirith_sword"); if (wpn) { vs.BoneIndices = new VertexStreamData.BoneIndex[0]; vs.BoneWeights = new VertexStreamData.BoneWeight[0]; }
+                bool wpn = name.StartsWith("cirith_sword") || name.StartsWith("cirith_probe"); if (wpn) { vs.BoneIndices = new VertexStreamData.BoneIndex[0]; vs.BoneWeights = new VertexStreamData.BoneWeight[0]; }
                 var origPosCount = me.PositionCount; var origSkin = me.SkinDataSize; var origUnk2 = me.UnknownInt2; var origBox = me.BoundingBox;
                 me.VertexStream = new ExternalLoader<VertexStreamData>(vs); me.VertexStream.OwnerGuid = me.Guid; me.VertexStream.UserData[VertexStreamData.KEY_HAS_QTANGENT] = true; typeof(AbstractExternalLoader).GetField("_unknownUint", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(me.VertexStream, 1u); if (ulS.TryGetValue(me.Guid, out var us0)) fU.SetValue(me.VertexStream, us0); { int ix0 = mm.TypelessDataSegments.IndexOf(oldStream); mm.TypelessDataSegments[ix0] = me.VertexStream; }
                 var uniq = pos.Select(p => (MathF.Round(p.X * 1e4f), MathF.Round(p.Y * 1e4f), MathF.Round(p.Z * 1e4f))).Distinct().Count();

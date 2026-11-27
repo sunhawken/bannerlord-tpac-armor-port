@@ -72,6 +72,7 @@ public class W { [DllImport("user32.dll")] public static extern bool ShowWindow(
 $hidden = $false; if ($Views) { $shot = $true }; $sw = [Diagnostics.Stopwatch]::StartNew(); if (-not $Views) { $shot = $false } ; $found = $null
 while ($sw.Elapsed.TotalSeconds -lt $Timeout -and -not $p.HasExited) {
   Start-Sleep -Milliseconds 300
+  Get-Process opera_crashreporter -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue      # auto-dismiss the game's crash dialog (it would otherwise pop up on the user's screen)
   # headless-style: the moment the game window exists, push it off-screen and hide it from the taskbar (rendering + in-engine screenshots keep working)
   if (-not $hidden) { $p.Refresh(); if ($p.MainWindowHandle -ne [IntPtr]::Zero) { [void][W]::SetWindowPos($p.MainWindowHandle, [IntPtr]::Zero, -32000, -32000, 0, 0, 0x0001 -bor 0x0004 -bor 0x0010); [void][W]::ShowWindow($p.MainWindowHandle, 0); $hidden = $true } }
   $txt = if (Test-Path $log) { Get-Content $log -Raw -ErrorAction SilentlyContinue } else { '' }
@@ -95,7 +96,4 @@ Start-Sleep -Milliseconds 500; [void][Dsk]::CloseDesktop($desk); if ($origCfg) {
 if (Test-Path (Join-Path $mod 'shots')) { New-Item -ItemType Directory -Force (Join-Path $out 'shots') | Out-Null; Get-ChildItem (Join-Path $mod 'shots\*.bmp') | ForEach-Object { python -c "from PIL import Image; Image.open(r'$($_.FullName)').convert('RGB').save(r'$out\shots\$($_.BaseName).png')" }; Write-Host "shots -> $out\shots" }
 if (Test-Path (Join-Path $mod 'shot.png')) { Copy-Item (Join-Path $mod 'shot.png') (Join-Path $out "engine_$Char.bmp") -Force; python -c "from PIL import Image; Image.open(r'$out\engine_$Char.bmp').save(r'$out\engine_$Char.png')" }
 if (Test-Path $log) { Copy-Item $log (Join-Path $out "engine_$Char.log") -Force; Get-Content $log | Select-Object -Last 25 } else { Write-Host 'NO LOG WRITTEN - module did not load' }
-
-
-
-
+Get-Process opera_crashreporter -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue

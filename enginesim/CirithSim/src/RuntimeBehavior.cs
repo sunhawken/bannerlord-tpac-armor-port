@@ -25,7 +25,7 @@ namespace CirithSim
             {
                 foreach (var a in Mission.Current.Agents)
                 {
-                    if (a != null && a.IsActive() && a.AgentVisuals != null && WeaponAnim.WieldedId(a, out _) != null || (a != null && wanim.ContainsKey(a))) { if (!wanim.TryGetValue(a, out var wa)) { wa = new WeaponAnim(); wanim[a] = wa; SimSubModule.L("runtime: weapon controller attached to " + (a.Name ?? "agent")); } wa.Update(a, dt); }
+                    if (a != null && a.IsActive() && a.AgentVisuals != null && WeaponAnim.IsWielding(a) || (a != null && wanim.ContainsKey(a))) { if (!wanim.TryGetValue(a, out var wa)) { wa = new WeaponAnim(); wanim[a] = wa; SimSubModule.L("runtime: weapon controller attached to " + (a.Name ?? "agent")); } wa.Update(a, dt); }
                     if (a == null || !a.IsActive() || a.AgentVisuals == null || !WearsAny(a)) continue;
                     if (!jig.TryGetValue(a, out var j)) { j = new Jiggle(); jig[a] = j; SimSubModule.L("runtime: jiggle rig attached to " + (a.Name ?? "agent")); }
                     j.Update(a, dt);
