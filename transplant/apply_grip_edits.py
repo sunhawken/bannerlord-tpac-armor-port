@@ -24,8 +24,15 @@ out = []; v3 = {'version': 3, 'note': 'made on the exact game mesh (carried from
 for clip in ('idle', 'walk', 'run', 'sprint'):
     e = j.get('clips', {}).get(clip, {}); p = e.get('pos', [0, 0, 0]); r = e.get('rot', [0, 0, 0])
     if ver == 2 and (any(p) or any(r)): p, r = carry(p, r)
+    adj = e.get('adj', []) if ver >= 3 else []
     if any(abs(x) > 1e-6 for x in list(p) + list(r)):
         out.append(f"{clip} {p[0]/100:.5f} {p[1]/100:.5f} {p[2]/100:.5f} {r[0]:.3f} {r[1]:.3f} {r[2]:.3f}"); v3['clips'][clip] = dict(pos=[round(x, 2) for x in p], rot=[round(x, 1) for x in r])
+    if adj: v3['clips'].setdefault(clip, {})['adj'] = adj
 dst = '../enginesim/CirithSim/module/ModuleData/cirith_grip_edits.txt'
 open(dst, 'w').write('\n'.join(out) + ('\n' if out else '')); json.dump(v3, open('../grip_editor/data/start_edits.json', 'w'), indent=1)
 print('read', src, '(version', ver, ') ->', dst, ':', len(out), 'pose(s)'); print(open(dst).read())
+# joint adjustments are baked into the clips: write the current file where retarget_anim.py reads it and regenerate the four clips
+json.dump(v3, open('../grip_editor/grip_edits.json', 'w'), indent=1)
+import subprocess
+for a, n in ((0, 'idle'), (1, 'walk'), (2, 'run'), (4, 'charge')):
+    r = subprocess.run([sys.executable, 'retarget_anim.py', str(a), n], capture_output=True, text=True); print(n, [l for l in r.stdout.splitlines() if 'joint adjustments' in l] or 'no joint adjustments', r.returncode)

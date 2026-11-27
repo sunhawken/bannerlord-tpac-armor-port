@@ -1,10 +1,10 @@
 """export_grip_editor.py - writes grip_editor/data/clips.json (the four retargeted clips) + sword.json (her sword mesh in Bannerlord sword space) for the sword-grip editor."""
 import json, numpy as np
-D = '../enginesim/CirithSim/module/ModuleData/'
+D = 'out_rig/anim_base/'
 clips = {}
 names = None
 for label, f in (('idle', 'idle'), ('walk', 'walk'), ('run', 'run'), ('sprint', 'charge')):
-    L = open(D + f'cirith_anim_{f}.txt').read().splitlines(); h = L[0].split(); n = int(h[1]); nb = int(h[2])
+    L = open(D + f'cirith_anim_{f}_base.txt').read().splitlines(); h = L[0].split(); n = int(h[1]); nb = int(h[2])
     dz = []; rot = []
     for i in range(n):
         p = L[i + 1].split(); dz.append(round(float(p[0]), 5)); rot.extend(round(float(x), 5) for x in p[3:3 + nb * 9])

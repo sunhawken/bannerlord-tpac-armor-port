@@ -1,34 +1,76 @@
 {
-  "version": 2,
-  "note": "sword placement per pose: pos = offset in cm along her left-hand bone axes, rot = degrees (Euler XYZ) about the sword own axes",
-  "clips": {
-    "idle": {
-      "pos": [
-        -14,
-        -15,
-        -2
-      ]
+ "version": 3,
+ "note": "version 3",
+ "clips": {
+  "idle": {
+   "pos": [
+    -2.77,
+    0.39,
+    -2.31
+   ],
+   "rot": [
+    -19.2,
+    0.2,
+    -1.1
+   ],
+   "adj": [
+    {
+     "bone": "r_hand",
+     "rot": [
+      -8.8,
+      -14.5,
+      -63
+     ],
+     "center": -1,
+     "width": 12
     },
-    "walk": {
-      "pos": [
-        -14,
-        -14,
-        0
-      ]
-    },
-    "run": {
-      "pos": [
-        -15.5,
-        -14.5,
-        -0.5
-      ]
-    },
-    "sprint": {
-      "pos": [
-        -15.5,
-        -12.5,
-        -0.5
-      ]
+    {
+     "bone": "r_foretwist",
+     "rot": [
+      0,
+      0,
+      30
+     ],
+     "center": 40,
+     "width": 30
     }
+   ]
+  },
+  "walk": {
+   "pos": [
+    -3.1,
+    1.4,
+    -0.3
+   ],
+   "rot": [
+    -19.2,
+    0.2,
+    -1.1
+   ]
+  },
+  "run": {
+   "pos": [
+    -4.35,
+    0.4,
+    -0.8
+   ],
+   "rot": [
+    -19.2,
+    0.2,
+    -1.1
+   ]
+  },
+  "sprint": {
+   "pos": [
+    -5,
+    2.3,
+    -0.8
+   ],
+   "rot": [
+    -19.2,
+    0.2,
+    -1.1
+   ]
   }
+ }
 }

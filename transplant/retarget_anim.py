@@ -39,13 +39,13 @@ S = np.diag([1.0, 1.0, -1.0]) if MIRROR else np.diag([-1.0, 1.0, -1.0])      # K
 frames = []; dz = []; rootpos = []; footz = []; handp = []
 GRIPC = None
 # ---- user edits from the grip editor (grip_editor/grip_edits.json): extra rotation per pose and bone, degrees, Euler XYZ (R = Rx Ry Rz), post-multiplied onto the bone's local rotation
-EDITS = {}
+# adjustments: [{bone, rot:[x,y,z] deg (Euler XYZ, R = Rx Ry Rz, post-multiplied onto the bone's local rotation), center:-1 = whole animation | frame (60 fps), width:frames}]
+ADJ = []
 _ef = os.environ.get('GRIP_EDITS', '../grip_editor/grip_edits.json')
 if os.path.exists(_ef) and not MIRROR:
-    _clipkey = {'charge': 'sprint'}.get(OUTNAME, OUTNAME); _bn = [x for x in bn]
-    for _name, _deg in json.load(open(_ef)).get('clips', {}).get(_clipkey, {}).items():
-        if _name in _bn: EDITS[_bn.index(_name)] = _deg
-    if EDITS: print('grip editor edits applied to', _clipkey, {bn[k]: v for k, v in EDITS.items()})
+    _clipkey = {'charge': 'sprint'}.get(OUTNAME, OUTNAME)
+    ADJ = [x for x in json.load(open(_ef)).get('clips', {}).get(_clipkey, {}).get('adj', []) if x.get('bone') in bn]
+    if ADJ: print('joint adjustments applied to', _clipkey, [(x['bone'], x['rot'], x.get('center', -1)) for x in ADJ])
 def _rxyz(d):
     a, b, c = np.radians(d); Rx = np.array([[1, 0, 0], [0, np.cos(a), -np.sin(a)], [0, np.sin(a), np.cos(a)]]); Ry = np.array([[np.cos(b), 0, np.sin(b)], [0, 1, 0], [-np.sin(b), 0, np.cos(b)]]); Rz = np.array([[np.cos(c), -np.sin(c), 0], [np.sin(c), np.cos(c), 0], [0, 0, 1]])
     return Rx @ Ry @ Rz
@@ -72,7 +72,6 @@ for f in range(nfr):
     for b in range(len(bn)):
         P = Wd[par[b]] if par[b] >= 0 else Rroot
         Rl = P.T @ Wd[b]
-        if b in EDITS: Rl = Rl @ _rxyz(EDITS[b])
         loc.append(Rl.ravel().tolist())               # local rotation (3x3 row-major; columns = images of the local axes)
     frames.append(loc)
     handp.append(Pk[20] - Pk[1]); rootpos.append(Pk[1].copy()); footz.append(float((Pk[23] - Pk[1])[2]))
@@ -106,6 +105,18 @@ for b in range(len(bn)):
 dzd = np.interp(tt, src_t, dz)
 # cumulative pelvis travel relative to frame 0: forward (KUF +z = Bannerlord forward) and lateral (KUF x mirrored)
 rp0 = rp - rp[0]; rfw = np.interp(tt, src_t, rp0[:, 2]) * SCALE; rlat = -np.interp(tt, src_t, rp0[:, 0]) * SCALE
+def _write(path, D):
+    with open(path, 'w') as fh:
+        fh.write(f'60 {NT} {len(bn)} {hs:.3f} {natv:.3f} {len(wins)}' + ''.join(f' {a:.3f} {b:.3f}' for a, b in wins) + chr(10))
+        for i in range(NT): fh.write(f'{dzd[i]:.5f} {rfw[i]:.5f} {rlat[i]:.5f} ' + ' '.join(f'{x:.6f}' for x in D[i].ravel()) + chr(10))
+if not MIRROR: _write('out_rig/anim_base/cirith_anim_' + OUTNAME + '_base.txt', dense)      # raw retarget = what the editor starts from
+for adj in ADJ:                                                                                   # bake the editor's joint adjustments (same maths as the editor preview)
+    bi = bn.index(adj['bone']); c = adj.get('center', -1); wd = max(float(adj.get('width', 12)), 1.0); R = np.array(adj['rot'], float)
+    for i in range(NT):
+        if c is None or c < 0: w = 1.0
+        else:
+            d = abs(i - c); d = min(d, NT - d); w = float(np.exp(-0.5 * (d / (wd / 2.0)) ** 2))
+        if w > 1e-3: dense[i, bi] = dense[i, bi] @ _rxyz(R * w)
 with open('../enginesim/CirithSim/module/ModuleData/cirith_anim_' + OUTNAME + '.txt', 'w') as fh:
     fh.write(f'60 {NT} {len(bn)} {hs:.3f} {natv:.3f} {len(wins)}' + ''.join(f' {a:.3f} {b:.3f}' for a, b in wins) + chr(10))
     for i in range(NT): fh.write(f'{dzd[i]:.5f} {rfw[i]:.5f} {rlat[i]:.5f} ' + ' '.join(f'{x:.6f}' for x in dense[i].ravel()) + chr(10))

@@ -50,6 +50,14 @@
   <div id="bones"></div>
   <div class="row" style="margin-top:8px"><button id="resetClip">Reset this pose</button><button id="copyTo">Copy to all poses</button></div>
 
+  <h2>Joints</h2>
+  <p class="help">The <span style="color:#3ddc84">green balls</span> are her joints (shoulder, elbow, wrist, hand, hips, spine, neck, head, knee, ankle, toe). <b>Drag one</b> to bend the body. Choose whether the change applies to the <b>whole animation</b> or only <b>around the moment</b> you are on (pause on a frame first).</p>
+  <div class="row"><label class="chk"><input type="checkbox" id="showJoints" checked> show joint balls</label></div>
+  <div class="row" style="margin-top:6px"><button id="modeAll" class="on">Whole animation</button><button id="modeMoment">Just around this moment</button></div>
+  <div class="row" style="margin-top:6px"><span style="color:var(--mut)">moment width</span><input id="jwidth" type="range" min="2" max="60" value="14" style="flex:1"><span id="jwl" style="color:var(--mut);width:48px">14 fr</span></div>
+  <div id="jsel" class="bone" style="display:none"></div>
+  <div id="jlist"></div>
+
   <h2>File</h2>
   <div class="row"><button class="big save" id="save">Save edits (grip_edits.json)</button><button id="loadBtn">Load edits…</button><input type="file" id="loadFile" accept=".json" hidden></div>
   <div id="status"></div>
@@ -66,6 +74,12 @@ const BONES = ['pelvis','l_thigh','l_calf','l_foot','l_toe0','r_thigh','r_calf',
 const SW = [['pos','Move the sword (cm)',-60,60,0.5],['rot','Turn the sword (degrees)',-180,180,1]];
 const CLIPS = [['idle','Idle'],['walk','Walk'],['run','Run'],['sprint','Sprint']];
 const KEY = 'cirithSwordEdits.v3';
+// joint balls: [id, label, bone whose origin (+ local offset) is the ball, local offset (m) or null, bone that ROTATES when the ball is dragged]
+const JOINTS = [['hips','Hips','spine',null,'pelvis'],['spine','Lower spine','spine1',null,'spine'],['chest','Chest','spine2',null,'spine1'],['upper','Upper back','neck',null,'spine2'],['neck','Neck','head',null,'neck'],['head','Head','head',[0.16,0,0],'head']];
+for (const s of ['l', 'r']) { const S = s.toUpperCase();
+  JOINTS.push([s+'sh', S+' shoulder', s+'_upperarm_twist', null, s+'_clavicle'], [s+'el', S+' elbow', s+'_foretwist', null, s+'_upperarm_twist'], [s+'wr', S+' wrist', s+'_hand', null, s+'_foretwist'], [s+'hand', S+' hand', s+'_hand', [0.10,0,0], s+'_hand'],
+              [s+'kn', S+' knee', s+'_calf', null, s+'_thigh'], [s+'an', S+' ankle', s+'_foot', null, s+'_calf'], [s+'toe', S+' toe', s+'_foot', [0.095,0.117,0], s+'_foot']); }
+let jballs = [], selJoint = null, selAdj = null, jmode = 'all';
 
 const view = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({ antialias:true }); renderer.setPixelRatio(devicePixelRatio); view.appendChild(renderer.domElement);
@@ -77,8 +91,8 @@ const grid = new THREE.GridHelper(6, 12, 0x3a4552, 0x252d37); scene.add(grid);
 function resize() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
-const SPARE = { l_finger0: 'spine2', r_finger0: 'head', l_toe0: 'pelvis', r_toe0: 'pelvis' }; const restWorld = {}, restInv = {}; let ballMove, ballTip, drag = null; let swordBase = new THREE.Matrix4(); let clipsData, gripJ, bones = {}, rest = {}, body = [], sword = null, root = null;
-let clip = 'idle', frame = 0, playing = true, speed = 0.5, acc = 0;
+const SPARE = { l_finger0: 'spine2', r_finger0: 'head', l_toe0: 'pelvis', r_toe0: 'pelvis' }; const restWorld = {}, restInv = {}; let ballMove, ballTip, drag = null, dragAdj = null; let swordBase = new THREE.Matrix4(); let clipsData, gripJ, bones = {}, rest = {}, body = [], sword = null, root = null;
+let clip = 'idle', frame = 0, playing = true, speed = 0.5, acc = 0; const toRad = Math.PI / 180;
 let edits = {}; let hadLocal = false; try { const ls = localStorage.getItem(KEY); hadLocal = !!ls; edits = JSON.parse(ls || '{}'); } catch (e) {}
 const zero = () => ({}); for (const [c] of CLIPS) edits[c] = edits[c] || {};
 const status = (t) => { document.getElementById('status').textContent = t; };
@@ -107,7 +121,9 @@ async function init() {
   const X = new THREE.Vector3(...gripJ.X).normalize(), Y = new THREE.Vector3(...gripJ.Y).normalize(), Z = new THREE.Vector3(...gripJ.Z).normalize();
   sword.matrixAutoUpdate = false; swordBase.makeBasis(X, Y, Z); sword.matrix.copy(swordBase); bones['l_hand'].add(sword);
   const mk = (color, r) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.92 })); m.renderOrder = 999; scene.add(m); return m; };
-  ballMove = mk(0xff9a2e, 0.035); ballTip = mk(0x35d0ff, 0.028); setupDrag();
+  ballMove = mk(0xff9a2e, 0.035); ballTip = mk(0x35d0ff, 0.028);
+  for (const j of JOINTS) { const m = mk(0x3ddc84, 0.021); m.userData.joint = j; jballs.push(m); }
+  setupDrag();
   if (!hadLocal) { try { const st = await (await fetch('data/start_edits.json')).json(); for (const [c] of CLIPS) edits[c] = (st.clips && st.clips[c]) ? JSON.parse(JSON.stringify(st.clips[c])) : {}; persist(); } catch (e) {} }
   buildUI(); setClip('idle'); animate();
 }
@@ -141,10 +157,11 @@ function buildUI() {
   document.getElementById('showSword').onchange = e => { sword.visible = e.target.checked; };
   document.getElementById('showBody').onchange = e => { for (const m of body) m.visible = e.target.checked; };
   document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => cam(b.dataset.cam));
+  setupJointUI();
 }
 function setClip(c) {
   clip = c; frame = 0; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.clip === c));
-  document.getElementById('curclip').textContent = CLIPS.find(x => x[0] === c)[1].toLowerCase(); document.getElementById('frame').max = clipsData.clips[c].n - 1; syncUI(); apply();
+  document.getElementById('curclip').textContent = CLIPS.find(x => x[0] === c)[1].toLowerCase(); document.getElementById('frame').max = clipsData.clips[c].n - 1; selAdj = null; syncUI(); renderJoints(); apply();
 }
 function syncUI() {
   for (const [kind] of SW) { const e3 = edits[clip][kind] || [0, 0, 0];
@@ -152,19 +169,24 @@ function syncUI() {
 }
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(edits)); } catch (e) {} }
 function save() {
-  const out = { version: 3, note: 'made on the exact game mesh. sword placement per pose: pos = offset in cm along her left-hand bone axes, rot = degrees (Euler XYZ) about the sword own axes', clips: {} };
-  for (const [c] of CLIPS) { out.clips[c] = {}; for (const [kind] of SW) { const e3 = edits[c][kind]; if (e3 && (e3[0] || e3[1] || e3[2])) out.clips[c][kind] = e3.map(Number); } }
+  const out = { version: 3, note: 'made on the exact game mesh. adj = joint changes (rot degrees Euler XYZ on the bone, center -1 = whole animation else frame, width in frames). sword placement per pose: pos = offset in cm along her left-hand bone axes, rot = degrees (Euler XYZ) about the sword own axes', clips: {} };
+  for (const [c] of CLIPS) { out.clips[c] = {}; for (const [kind] of SW) { const e3 = edits[c][kind]; if (e3 && (e3[0] || e3[1] || e3[2])) out.clips[c][kind] = e3.map(Number); } const ad = (edits[c].adj || []).filter(a => a.rot.some(v => Math.abs(v) > 0.05)); if (ad.length) out.clips[c].adj = ad.map(a => ({ bone: a.bone, rot: a.rot.map(Number), center: a.center == null ? -1 : a.center, width: a.width || 12 })); }
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' })); a.download = 'grip_edits.json'; a.click(); URL.revokeObjectURL(a.href);
   status('Saved grip_edits.json to your Downloads folder - send it to me.');
 }
 
 const m4 = new THREE.Matrix4(), qa = new THREE.Quaternion(), qe = new THREE.Quaternion(), eu = new THREE.Euler();
+const adjList = () => (edits[clip].adj = edits[clip].adj || []);
+function adjWeight(a, f, n) { if (a.center == null || a.center < 0) return 1; let d = Math.abs(f - a.center); d = Math.min(d, n - d); return Math.exp(-0.5 * Math.pow(d / (Math.max(a.width || 12, 1) / 2), 2)); }
+function adjQuat(a, f, n) { const w = adjWeight(a, f, n); eu.set(a.rot[0] * toRad * w, a.rot[1] * toRad * w, a.rot[2] * toRad * w, 'XYZ'); return new THREE.Quaternion().setFromEuler(eu); }
+function animQuat(i, f, c) { const k = f * c.nb * 9 + i * 9, r = c.rot; m4.set(r[k], r[k + 1], r[k + 2], 0, r[k + 3], r[k + 4], r[k + 5], 0, r[k + 6], r[k + 7], r[k + 8], 0, 0, 0, 0, 1); return new THREE.Quaternion().setFromRotationMatrix(m4); }
+// local rotation of a bone at frame f = clip rotation * (all adjustments of that bone, in list order, except `skip`)
+function boneLocalQuat(name, f, skip) { const c = clipsData.clips[clip]; const q = animQuat(BONES.indexOf(name), f, c); for (const a of (edits[clip].adj || [])) if (a !== skip && a.bone === name) q.multiply(adjQuat(a, f, c.n)); return q; }
 function apply() {
   const c = clipsData.clips[clip]; const f = Math.max(0, Math.min(c.n - 1, Math.floor(frame))); const o = f * c.nb * 9;
   for (let i = 0; i < BONES.length; i++) {
     const b = bones[BONES[i]]; if (!b) continue; const r = c.rot; const k = o + i * 9;
-    m4.set(r[k], r[k + 1], r[k + 2], 0, r[k + 3], r[k + 4], r[k + 5], 0, r[k + 6], r[k + 7], r[k + 8], 0, 0, 0, 0, 1); qa.setFromRotationMatrix(m4);
-    b.quaternion.copy(qa);
+    b.quaternion.copy(boneLocalQuat(BONES[i], f, null));
   }
   { const ed = edits[clip]; const pos = ed.pos || [0, 0, 0], rot = ed.rot || [0, 0, 0]; sword.matrix.copy(swordBase); eu.set(rot[0] * Math.PI / 180, rot[1] * Math.PI / 180, rot[2] * Math.PI / 180, 'XYZ'); sword.matrix.multiply(new THREE.Matrix4().makeRotationFromEuler(eu)); sword.matrix.setPosition(pos[0] / 100, pos[1] / 100, pos[2] / 100); sword.matrixWorldNeedsUpdate = true; }
   const p = bones['pelvis']; p.position.copy(rest['pelvis'].p); p.position.z += c.dz[f];
@@ -177,18 +199,21 @@ function apply() {
 function placeBalls() {
   if (!ballMove) return; sword.updateWorldMatrix(true, false);
   ballMove.position.setFromMatrixPosition(sword.matrixWorld); ballTip.position.set(0, 0, 0.9).applyMatrix4(sword.matrixWorld);
+  const showJ = document.getElementById('showJoints') ? document.getElementById('showJoints').checked : true;
+  for (const m of jballs) { const j = m.userData.joint; const b = bones[j[2]]; m.visible = showJ; if (b) m.position.copy(b.localToWorld(new THREE.Vector3(...(j[3] || [0, 0, 0])))); m.material.color.setHex(selJoint === j[0] ? 0xffe14d : 0x3ddc84); }
 }
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(), hit = new THREE.Vector3(), vTmp = new THREE.Vector3();
 function setupDrag() {
   const el = renderer.domElement;
   const setNdc = e => { const r = el.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); raycaster.setFromCamera(ndc, camera); };
   el.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return; setNdc(e); const h = raycaster.intersectObjects([ballMove, ballTip], false)[0]; if (!h) return;
-    drag = h.object; controls.enabled = false; el.setPointerCapture(e.pointerId); playing = false; const pb = document.getElementById('play'); pb.textContent = 'Play'; pb.classList.remove('on');
+    if (e.button !== 0) return; setNdc(e); const h = raycaster.intersectObjects([ballMove, ballTip, ...jballs.filter(m => m.visible)], false)[0]; if (!h) return;
+    drag = h.object; if (drag.userData.joint) { selectJoint(drag.userData.joint[0]); dragAdj = null; } controls.enabled = false; el.setPointerCapture(e.pointerId); playing = false; const pb = document.getElementById('play'); pb.textContent = 'Play'; pb.classList.remove('on');
     camera.getWorldDirection(vTmp); plane.setFromNormalAndCoplanarPoint(vTmp, drag.position); e.preventDefault();
   });
   el.addEventListener('pointermove', e => {
     if (!drag) return; setNdc(e); if (!raycaster.ray.intersectPlane(plane, hit)) return;
+    if (drag.userData.joint) { dragJoint(drag.userData.joint); return; }
     const hand = bones['l_hand']; hand.updateWorldMatrix(true, false); const local = hand.worldToLocal(hit.clone());          // the dragged point in her left-hand bone frame (metres)
     const ed = edits[clip];
     if (drag === ballMove) {
@@ -204,7 +229,41 @@ function setupDrag() {
   });
   const end = e => { if (!drag) return; drag = null; controls.enabled = true; try { el.releasePointerCapture(e.pointerId); } catch (er) {} };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
-  el.addEventListener('pointermove', e => { if (drag) return; setNdc(e); el.style.cursor = raycaster.intersectObjects([ballMove, ballTip], false).length ? 'grab' : ''; });
+  el.addEventListener('pointermove', e => { if (drag) return; setNdc(e); el.style.cursor = raycaster.intersectObjects([ballMove, ballTip, ...jballs.filter(m => m.visible)], false).length ? 'grab' : ''; });
+}
+const frameCount = () => clipsData.clips[clip].n;
+function findAdj(bone, mode) { const f = Math.floor(frame); return adjList().find(a => a.bone === bone && (mode === 'all' ? (a.center == null || a.center < 0) : (a.center >= 0 && Math.abs(a.center - f) <= 2))); }
+function ensureAdj(bone) { let a = findAdj(bone, jmode); if (!a) { a = { bone, rot: [0, 0, 0], center: jmode === 'all' ? -1 : Math.floor(frame), width: +document.getElementById('jwidth').value }; adjList().push(a); } return a; }
+function dragJoint(j) {
+  const rb = bones[j[4]]; if (!rb || !rb.parent) return; const f = Math.floor(frame), n = frameCount();
+  rb.updateWorldMatrix(true, false); const pivot = rb.getWorldPosition(new THREE.Vector3());
+  const c = drag.position.clone().sub(pivot); const d = hit.clone().sub(pivot); if (c.length() < 1e-4 || d.length() < 1e-4) return; c.normalize(); d.normalize();
+  const dq = new THREE.Quaternion().setFromUnitVectors(c, d);
+  const qParentW = rb.parent.getWorldQuaternion(new THREE.Quaternion()), qCurW = rb.getWorldQuaternion(new THREE.Quaternion());
+  const qNewLocal = qParentW.clone().invert().multiply(dq.multiply(qCurW));                       // where the bone should point now, in its parent's frame
+  const a = dragAdj && dragAdj.bone === j[4] ? dragAdj : ensureAdj(j[4]); dragAdj = a; selAdj = a;
+  const qBase = boneLocalQuat(j[4], f, a); const qEff = qBase.invert().multiply(qNewLocal);       // adjustment that is needed at this frame
+  const w = Math.max(0.15, adjWeight(a, f, n)); const e3 = new THREE.Euler().setFromQuaternion(qEff, 'XYZ');
+  a.rot = [e3.x, e3.y, e3.z].map(v => Math.max(-180, Math.min(180, Math.round(v / toRad / w * 10) / 10)));
+  persist(); renderJoints(); apply();
+}
+function selectJoint(id) { selJoint = id; const j = JOINTS.find(x => x[0] === id); selAdj = j ? (findAdj(j[4], jmode) || null) : null; renderJoints(); placeBalls(); }
+function renderJoints() {
+  const box = document.getElementById('jsel'); const list = document.getElementById('jlist'); const j = JOINTS.find(x => x[0] === selJoint);
+  if (j) {
+    const a = selAdj; box.style.display = '';
+    box.innerHTML = '<b>' + j[1] + '</b> <span style="color:var(--mut);font-size:12px">(bends ' + j[4] + ')</span>' + ['X', 'Y', 'Z'].map((ax, i) => '<div class="ax"><label>' + ax + '</label><input type="range" min="-180" max="180" step="1" value="' + (a ? a.rot[i] : 0) + '" data-ji="' + i + '"><input type="number" min="-180" max="180" step="1" value="' + (a ? a.rot[i] : 0) + '" data-jn="' + i + '"></div>').join('') + '<div style="color:var(--mut);font-size:12px;margin-top:4px">' + (a ? (a.center >= 0 ? 'only around frame ' + (a.center + 1) + ' (+-' + Math.round(a.width / 2) + ')' : 'whole animation') : 'drag the ball or move a slider to start') + '</div>';
+  } else box.style.display = 'none';
+  const adj = edits[clip].adj || [];
+  list.innerHTML = adj.length ? '<div style="color:var(--mut);font-size:12px;margin:8px 0 2px">Joint changes in this pose:</div>' + adj.map((a, i) => { const jj = JOINTS.find(x => x[4] === a.bone); return '<div class="row" style="margin:3px 0"><button data-sel="' + i + '" style="flex:1;text-align:left">' + (jj ? jj[1] : a.bone) + ' - ' + (a.center >= 0 ? 'frame ' + (a.center + 1) : 'whole') + ' (' + a.rot.map(v => Math.round(v)).join(', ') + ')</button><button data-del="' + i + '">x</button></div>'; }).join('') : '';
+}
+function setupJointUI() {
+  document.getElementById('jsel').addEventListener('input', e => { const t = e.target; const i = +(t.dataset.ji !== undefined ? t.dataset.ji : t.dataset.jn); if (Number.isNaN(i)) return; const j = JOINTS.find(x => x[0] === selJoint); if (!j) return; const a = selAdj || ensureAdj(j[4]); selAdj = a; a.rot[i] = Math.max(-180, Math.min(180, +t.value || 0)); persist(); renderJoints(); apply(); });
+  document.getElementById('jlist').addEventListener('click', e => { const t = e.target; if (t.dataset.del != null) { adjList().splice(+t.dataset.del, 1); selAdj = null; persist(); renderJoints(); apply(); } else if (t.dataset.sel != null) { const a = adjList()[+t.dataset.sel]; if (a) { selAdj = a; const jj = JOINTS.find(x => x[4] === a.bone); selJoint = jj ? jj[0] : null; if (a.center >= 0) { frame = a.center; playing = false; document.getElementById('play').textContent = 'Play'; document.getElementById('play').classList.remove('on'); } renderJoints(); apply(); } } });
+  const setMode = m => { jmode = m; document.getElementById('modeAll').classList.toggle('on', m === 'all'); document.getElementById('modeMoment').classList.toggle('on', m === 'moment'); if (selJoint) { const j = JOINTS.find(x => x[0] === selJoint); selAdj = findAdj(j[4], jmode) || null; } renderJoints(); };
+  document.getElementById('modeAll').onclick = () => setMode('all'); document.getElementById('modeMoment').onclick = () => setMode('moment');
+  const jw = document.getElementById('jwidth'); jw.oninput = () => { document.getElementById('jwl').textContent = jw.value + ' fr'; if (selAdj && selAdj.center >= 0) { selAdj.width = +jw.value; persist(); renderJoints(); apply(); } };
+  document.getElementById('showJoints').onchange = () => placeBalls();
 }
 const tmp = new THREE.Vector3();
 function cam(kind) {

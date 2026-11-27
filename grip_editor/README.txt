@@ -1,13 +1,13 @@
-CIRITH SWORD GRIP EDITOR
-========================
-1. Double-click  "Start Grip Editor.bat"  (needs Python; it opens http://127.0.0.1:8790/ - this is separate from your gallery).
-2. Pick a pose (Idle / Walk / Run / Sprint). Her body plays her original animation untouched.
-3. Drag the orange ball (moves the sword) or the blue ball at the blade tip (turns the blade) in the 3D view, or use the sliders, to place the SWORD until it sits where you want it in her left hand:
-     Move the sword (cm)    - along her left-hand bone axes
-     Turn the sword (deg)   - around the sword's own axes (X across the guard, Y thin side, Z along the blade)
-   "Close on hand" shows a close-up; "Copy to all poses" copies the numbers of the current pose to the others.
-4. Press  "Save edits"  -> your browser downloads grip_edits.json. Send that file back.
-   (Your numbers are also remembered in this browser, and "Load edits..." re-opens a saved file.)
+CIRITH SWORD + POSE EDITOR
+==========================
+1. Double-click  "Start Grip Editor.bat"  (needs Python; opens http://127.0.0.1:8790/ - separate from your gallery). Press Ctrl+F5 if you see an old version.
+2. The model is the EXACT mesh the game uses (angled arms, slid hands, wrist sleeves, trims). Pick a pose: Idle / Walk / Run / Sprint.
+3. SWORD: drag the orange ball (moves the sword) or the blue ball at the blade tip (turns the blade), or use the sliders.
+4. BODY: the green balls are her joints (shoulder, elbow, wrist, hand, hips, spine, neck, head, knee, ankle, toe, both sides).
+   - Pause on a frame, drag a ball to bend that joint.
+   - "Whole animation" = the bend is added to every frame of the pose. "Just around this moment" = a smooth bend centred on the frame you are on
+     (the "moment width" slider sets how many frames it spreads over).
+   - Click a ball to select it and fine-tune X/Y/Z; the list under it shows every joint change in the pose (click to jump to it, x deletes it).
+5. "Save edits" downloads grip_edits.json - send it back. "Reset this pose" clears the sword + joint changes of the current pose. Your work is also kept in this browser.
 
-What happens with the file: transplant\apply_grip_edits.py grip_edits.json  writes enginesim\CirithSim\module\ModuleData\cirith_grip_edits.txt,
-which the CirithSim DLL reads when the game starts. The sword in the game is placed with exactly the same maths as the preview.
+What happens with the file: transplant\apply_grip_edits.py grip_edits.json bakes your joint changes into the four clips (retarget_anim.py) and writes the sword offsets for the DLL.
