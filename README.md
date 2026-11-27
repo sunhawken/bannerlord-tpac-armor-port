@@ -48,7 +48,9 @@ Check with a byte diff: re-serialize a vanilla stream and compare to the decompr
 - **Replace segments in place** (same list index) - do not remove+append.
 - Keep each mesh's `MeshEditData` consistent with its vertex stream. Leaving a *vanilla* edit-data behind is dangerous: a vanilla mitten's 26 grip-morph frames get applied
   to your hand mesh and deform it into black blobs.
-- Keep the vanilla LOD structure; replace LOD0 first. (LOD1+ staying vanilla is a known gap.)
+- **Replace EVERY LOD, not just LOD0.** If LOD1+ keep the template's vanilla geometry, small parts (hands, feet) get drawn from a vanilla LOD even at close range:
+  you see the *vanilla silhouette* (a boxy mitten) textured with *your* atlas through the vanilla UVs - orange/black garbage that looks like a texture bug but is really
+  the wrong mesh. Give each LOD its own `VertexStream` + `MeshEditData` (same data is fine; decimate later) and keep the vanilla LOD list/order.
 
 ### C. Vertex stream encoding (all measured against vanilla meshes)
 | array | encoding |
@@ -73,7 +75,10 @@ Check with a byte diff: re-serialize a vanilla stream and compare to the decompr
 - Alpha-masked parts (filigree, trims) need a **DXT5** texture and an alpha-tested material. Clone a vanilla one
   (`imperial_lamellar_a_alpha`: `alpha_test`, two-sided, `disable_vertex_color_alpha`) and swap slot 0; use the engine's own `plain_black` (colour mask),
   `flat_n` (flat normal) and `default_specular` for slots 1/2/4.
-- Merge several atlases into one POT atlas (here 512x1024) and remap UVs, so every slot is one mesh + one material.
+- Merge several atlases into one POT atlas (here 512x1024) and remap UVs, so every slot is one mesh + one material. **Leave a gutter** (replicate the edge rows of
+  the upper atlas for >=16 px) between atlases, or bilinear/mip filtering bleeds one into the other at shared edges.
+- **Sanitize garbage UVs.** Source meshes can contain a handful of vertices with UVs like (-71, 117). A viewer's REPEAT sampler hides them; in a merged atlas they
+  smear colours across their triangles. Replace each by the mean UV of its in-range neighbours (`fix_uv` in `dump_slots.py`).
 - Write your own DXT1/DXT5 + mip chain (`enginesim/mk_atlas.py`); the texture pixel segment is just the mip blobs concatenated.
 - Material `ShaderMaterialFlags` containing `disable_vertex_color_alpha` lets you reuse vertex alpha for cloth weights without making the mesh transparent.
 
@@ -102,10 +107,11 @@ Item `mesh="<metamesh name>"`, `Type="BodyArmor|LegArmor|HandArmor|HeadArmor"`. 
 - `views_full.txt` lists `name az elev dist targetHeight fov` per line -> `-Views views_full.txt` writes one PNG per line.
 - A killed game can leave a zombie process that locks the mod DLL - check `Process.HasExited`, not just existence.
 
-## 4. Bisecting an "invisible / exploded" armor (the method that finally worked)
+## 4. Bisecting an "invisible / exploded / wrong-looking" armor (the method that finally worked)
 Never change several things at once. Start from a **positive control** (vanilla metamesh cloned under a new name renders), then change one thing:
 1. clone untouched -> renders. 2. repack the *untouched* vertex stream through your writer -> found the writer bugs (explosion).
-3. re-encode vanilla data through your encoder -> invisible -> found the metamesh-name bug. 4. only then swap in your own geometry.
+3. re-encode vanilla data through your encoder -> invisible -> found the metamesh-name bug. 4. only then swap in your own geometry. 5. If one part looks like a *different object* with your texture on it, suspect LODs (see B).
+Isolate a part with its own test character that wears only that item, and render a numpy/GL preview of the source mesh with its texture to compare against the engine.
 Also compare packages field-by-field (`tool pkgdiff a.tpac b.tpac`) and diff serialized bytes (`tool rawstream`).
 
 ## 5. Not solved: in-game cloth / jiggle

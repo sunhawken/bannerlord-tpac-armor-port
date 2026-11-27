@@ -77,6 +77,15 @@ def hang_ponytail(pos, nrm):
 g = Glb('out_rig/cirith_armor_rigged.glb')
 prims = {n: d for n, _, d in g.primitives()}
 TRIM = {'cirith_body_armor': 'cirith_body_trim_armor', 'cirith_legs_armor': 'cirith_legs_trim_armor', 'cirith_hands_armor': 'cirith_hands_trim_armor'}
+def fix_uv(uv, idx):
+    """a few vertices carry garbage UVs (u=-71, v=117...). The viewer's REPEAT sampler hides them; in the merged atlas they smear every colour across their triangles.
+    Replace each by the mean UV of the in-range vertices that share a triangle with it."""
+    uv = uv.astype(np.float64).copy(); bad = ((uv < -0.02) | (uv > 1.02)).any(1)
+    for i in np.where(bad)[0]:
+        nb = np.unique(idx[(idx == i).any(1)]); nb = nb[~bad[nb]]
+        uv[i] = uv[nb].mean(0) if len(nb) else np.clip(uv[i], 0, 1)
+    return np.clip(uv, 0.0, 1.0)
+
 def merged(n):
     import os
     hands = (n == 'cirith_hands_armor') and os.environ.get('NATIVE_HANDS') == '1'      # off by default: HER converted hands are used (native Bannerlord hands were a rejected experiment)
@@ -86,14 +95,15 @@ def merged(n):
         d['uv'] = np.stack([0.293 + uv0[:, 0] * 0.078, (0.3125 + uv0[:, 1] * 0.117) * 0.25], 1); d['al'] = np.full(len(d['pos']), 255, np.uint8)
     else:
         d = dict(prims[n]); d['pos'], d['nrm'] = angle_arms(d['pos'], d['nrm'], d['jnt'], d['wgt'])
-        d['uv'] = d['uv'].astype(np.float64).copy(); d['uv'][:, 1] = d['uv'][:, 1] * 0.25          # main atlas = top quarter of the 512x1024 combined atlas
+        d['uv'] = fix_uv(d['uv'], d['idx'])
+        d['uv'][:, 1] = d['uv'][:, 1] * 0.25          # main atlas = top quarter of the 512x1024 combined atlas
         col = d.get('col'); d['al'] = np.full(len(d['pos']), 255, np.uint8) if col is None else (np.clip(np.asarray(col)[:, 3] * (255.0 if np.asarray(col).dtype.kind == 'f' else 1.0), 0, 255)).astype(np.uint8)
     t = TRIM.get(n)
     import os
-    if t and hands and os.environ.get('NOTRIM_HANDS') == '1': t = None
+    if t and n == 'cirith_hands_armor' and os.environ.get('NOTRIM_HANDS') == '1': t = None
     if t:
         e = dict(prims[t]); e['pos'], e['nrm'] = angle_arms(e['pos'], e['nrm'], e['jnt'], e['wgt'])
-        off = len(d['pos']); uv = e['uv'].astype(np.float64).copy(); uv[:, 1] = 0.25 + uv[:, 1] * 0.5            # trim atlas (alpha-masked) = next half
+        off = len(d['pos']); uv = e['uv'].astype(np.float64).copy(); uv[:, 1] = 272.0 / 1024 + uv[:, 1] * 0.5            # trim atlas (alpha-masked) = next half
         for k in ('pos', 'nrm', 'jnt', 'wgt'): d[k] = np.concatenate([d[k], e[k]])
         d['uv'] = np.concatenate([d['uv'], uv]); d['idx'] = np.concatenate([d['idx'], e['idx'] + off]); d['al'] = np.concatenate([d['al'], np.full(len(e['pos']), 0 if d['al'].min() < 255 else 255, np.uint8)])
     return d

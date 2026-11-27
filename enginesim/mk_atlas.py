@@ -2,7 +2,12 @@
 import struct, sys, numpy as np
 from PIL import Image
 a0 = Image.open('tex/atlas1.png').convert('RGBA'); a1 = Image.open('tex/atlas2.png').convert('RGBA')
-atlas = Image.new('RGBA', (512, 1024), (0, 0, 0, 255)); atlas.paste(a0, (0, 0)); atlas.paste(a1, (0, 256)); atlas.save('tex/cirith_atlas.png')
+# layout (512x1024): atlas0 rows 0..255 | 16px gutter replicating atlas0's last row | atlas1 rows 272..783 | rest replicates atlas1's last row.
+# The gutters stop bilinear/mip filtering from bleeding the orange trim atlas into the bottom edge of the main atlas (her fingers sit there).
+atlas = Image.new('RGBA', (512, 1024), (0, 0, 0, 255)); atlas.paste(a0, (0, 0))
+last0 = a0.crop((0, 255, 512, 256)); [atlas.paste(last0, (0, 256 + k)) for k in range(16)]
+atlas.paste(a1, (0, 272)); last1 = a1.crop((0, 511, 512, 512)); [atlas.paste(last1, (0, 784 + k)) for k in range(240)]
+atlas.save('tex/cirith_atlas.png')
 
 def enc_color(rgb):                                        # rgb (n,16,3) float -> (n,) uint64 8-byte DXT1 colour block
     lo = rgb.min(1); hi = rgb.max(1)
