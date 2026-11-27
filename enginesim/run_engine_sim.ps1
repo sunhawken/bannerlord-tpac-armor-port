@@ -9,7 +9,7 @@
 param([string]$Char = 'cirith_test', [string]$Scene = 'battle_terrain_a', [int]$ShotDelay = 8, [int]$Timeout = 150, [switch]$KeepOpen, [switch]$Visible, [string]$Views = '', [string]$ExtraModules = '')
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$game = 'S:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord'
+$game = 'T:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord'
 $mod = Join-Path $game 'Modules\CirithSim'
 $bin = Join-Path $game 'bin\Win64_Shipping_Client'
 $out = Join-Path $here 'out'; New-Item -ItemType Directory -Force $out | Out-Null

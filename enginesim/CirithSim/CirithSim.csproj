@@ -4,7 +4,7 @@
     <Nullable>disable</Nullable><LangVersion>latest</LangVersion><GenerateAssemblyInfo>false</GenerateAssemblyInfo><EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup><Compile Include="src/*.cs" /></ItemGroup>
-  <PropertyGroup><G>S:/SteamLibrary/steamapps/common/Mount &amp; Blade II Bannerlord</G></PropertyGroup>
+  <PropertyGroup><G>T:/SteamLibrary/steamapps/common/Mount &amp; Blade II Bannerlord</G></PropertyGroup>
   <ItemGroup>
     <Reference Include="TaleWorlds.Core"><HintPath>$(G)/bin/Win64_Shipping_Client/TaleWorlds.Core.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TaleWorlds.Library"><HintPath>$(G)/bin/Win64_Shipping_Client/TaleWorlds.Library.dll</HintPath><Private>false</Private></Reference>

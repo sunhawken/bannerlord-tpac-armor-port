@@ -2,7 +2,7 @@
 import struct, sys, numpy as np
 from PIL import Image
 import os
-a0 = Image.open('tex/atlas1_gems.png' if os.path.exists('tex/atlas1_gems.png') else 'tex/atlas1.png').convert('RGBA')   # gems version = black around the hip gems cut out (transform/gem_mask.py)
+a0 = Image.open('tex/atlas1_gems.png' if (os.environ.get('EDITED_TEXTURE') == '1' and os.path.exists('tex/atlas1_gems.png')) else 'tex/atlas1.png').convert('RGBA')   # gems version = black around the hip gems cut out (transform/gem_mask.py)
 a1 = Image.open('tex/atlas2.png').convert('RGBA')
 # layout (512x1024): atlas0 rows 0..255 | 16px gutter replicating atlas0's last row | atlas1 rows 272..783 | rest replicates atlas1's last row.
 # The gutters stop bilinear/mip filtering from bleeding the orange trim atlas into the bottom edge of the main atlas (her fingers sit there).
@@ -17,7 +17,7 @@ if os.path.exists('tex/areola_detail.png'):
     sw = np.asarray(Image.open('tex/areola_detail.png').convert('L').resize((96, 96), Image.LANCZOS)).astype(float); det = np.clip(0.55 + 0.45 * sw / max(sw.mean(), 1e-3), 0.4, 1.6)
 rgb = (np.array([10, 7, 7], float)[None, None, :] * det[..., None] * (1 + 1.6 * np.clip(1 - rr / 0.30, 0, 1)[..., None]))
 tile = np.dstack([np.clip(rgb, 0, 255), np.where(rr <= 1.0, 255, 0)]).astype(np.uint8)
-atlas.paste(Image.fromarray(tile, 'RGBA'), (16, 800))
+if os.environ.get('AREOLA_TILE') == '1': atlas.paste(Image.fromarray(tile, 'RGBA'), (16, 800))      # decal tile only for the abandoned decal experiment
 atlas.save('tex/cirith_atlas.png')
 
 def enc_color(rgb):                                        # rgb (n,16,3) float -> (n,) uint64 8-byte DXT1 colour block

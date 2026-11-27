@@ -7,7 +7,7 @@ label = sys.argv[1]; specs = [x.split(':') for x in sys.argv[2].split(';') if x]
 for f in glob.glob(os.path.join(MOD, 'AssetPackages', 'cloth_var_*.tpac')) + [os.path.join(MOD, 'AssetPackages', 'cloth_test.tpac')]:
     if os.path.exists(f): os.remove(f)
 items = []
-G = r'S:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\Native\AssetPackages'
+G = r'T:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\Native\AssetPackages'
 for i, (name, z) in enumerate(specs):
     env = dict(os.environ); env['CK_ZERO'] = '' if z == '-' else z; env['CK_PATCH'] = ''
     out = os.path.join(MOD, 'AssetPackages', f'cloth_var_{i}.tpac')
