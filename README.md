@@ -70,6 +70,8 @@ Check with a byte diff: re-serialize a vanilla stream and compare to the decompr
 - **The skeleton's rest arms point ~27 deg downward**, not T-pose. If your arms are modelled horizontal the hands float ~18 cm above the hand bones and
   weapons are not held. Fix: rotate each arm vertex about the upper-arm bone by the angle between your arm chain and the bone chain, scaled by the vertex's
   arm-bone weight (`angle_arms` in `transplant/dump_slots.py`). Hands then land within 1-3 cm of the hand bones.
+  **Measure the angle once and apply the identical rotation to EVERY slot** (body, armlets, trims). My first version silently skipped slots without hand
+  vertices, which left the upper arm and the orange forearm bracers ~19 deg out of place - they stuck out like wings.
   Then do a **grip fit**: the engine puts the weapon in the palm of *its* hand, so compare your hand's proximal end with the native `hands_female_a` along the arm
   direction and slide yours until they match (here ~5 cm) - otherwise the hand floats above the grab point.
 
@@ -129,3 +131,7 @@ project has not decoded yet. PRs / findings welcome.
 - `enginesim/` - hidden-desktop runner, free-cam mod, atlas/DXT encoder, example module XML
 
 Legal: Bannerlord is (c) TaleWorlds. This repo contains only original tooling and notes; do not redistribute game or third-party model assets.
+
+### Wrist sleeve
+Sliding a hand to the grab point leaves a gap at the wrist. Do not stretch anything: add a short tube of the *same radius* as the two rings it joins
+(forearm distal ring -> hand proximal ring), skinned over a few rings from the forearm bone to the hand bone (`dump_slots.py`).

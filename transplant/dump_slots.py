@@ -8,6 +8,7 @@ from pose import Rig as _Skel
 _sk = _Skel(g_ := Glb('out_rig/cirith_armor_rigged.glb'))
 _names = [g_.j['nodes'][i]['name'] for i in _sk.joints]; _W = _sk.world(None)
 _B = {n: (lambda p: np.array([p[0], -p[2], p[1]]))(_W[_sk.joints[k]][:3, 3]) for k, n in enumerate(_names)}
+ARM_D = {}
 ARM = {'r': ['r_upperarm_twist', 'r_upperarm_twist1', 'r_foretwist', 'r_foretwist1', 'r_hand', 'r_finger0'], 'l': ['l_upperarm_twist', 'l_upperarm_twist1', 'l_foretwist', 'l_foretwist1', 'l_hand', 'l_finger0']}
 def angle_arms(pos, nrm, jnt, wgt, log=False):
     """Her arms are modelled horizontal (T-pose); Bannerlord's skeleton rest has them angled ~27 deg down from the chest to the hands. Rotate every arm vertex about the
@@ -22,10 +23,12 @@ def angle_arms(pos, nrm, jnt, wgt, log=False):
         a = np.clip(a, 0, 1)
         # target angle: bone chain pivot->hand vs her hand mesh centre (hand-dominant verts of this side)
         dom = np.take_along_axis(jnt, np.argmax(wgt, 1)[:, None], 1)[:, 0]; hm = np.isin(dom, [_names.index(side + '_hand'), _names.index(side + '_finger0')]) & ((pos[:, 0] > 0) == (side == 'r'))
-        if hm.sum() < 5: continue
-        her = pos[hm].mean(0) - pivot; bone = _B[side + '_hand'] - pivot
         ang = lambda v: np.arctan2(v[2], abs(v[0]))                                   # elevation in the x-z plane, outward = +
-        d = ang(bone) - ang(her)                                                      # negative = rotate down
+        if hm.sum() >= 5:
+            her = pos[hm].mean(0) - pivot; bone = _B[side + '_hand'] - pivot
+            d = ang(bone) - ang(her); ARM_D[side] = d                                  # measured once on the hand slot ...
+        elif side in ARM_D: d = ARM_D[side]                                            # ... and applied identically to EVERY slot (body, armlets, trims). Skipping slots
+        else: continue                                                                 # without hand verts left the upper arm + orange bracers 19 deg out of place.                                                      # negative = rotate down
         th = d * a * (1 if side == 'r' else -1)                                       # CCW angle in (x,z) for the right side is -d... handled below
         for arr in (pos, nrm):
             rel = arr - (pivot if arr is pos else 0)
@@ -76,7 +79,10 @@ def hang_ponytail(pos, nrm):
 
 g = Glb('out_rig/cirith_armor_rigged.glb')
 prims = {n: d for n, _, d in g.primitives()}
+angle_arms(prims['cirith_hands_armor']['pos'], prims['cirith_hands_armor']['nrm'], prims['cirith_hands_armor']['jnt'], prims['cirith_hands_armor']['wgt'])   # measure ARM_D first
 TRIM = {'cirith_body_armor': 'cirith_body_trim_armor', 'cirith_legs_armor': 'cirith_legs_trim_armor', 'cirith_hands_armor': 'cirith_hands_trim_armor'}
+_p = {n: d for n, _, d in g.primitives()} if False else None
+
 def fix_uv(uv, idx):
     """a few vertices carry garbage UVs (u=-71, v=117...). The viewer's REPEAT sampler hides them; in the merged atlas they smear every colour across their triangles.
     Replace each by the mean UV of the in-range vertices that share a triangle with it."""
@@ -115,6 +121,39 @@ def merged(n):
             delta = 0.052 * a + np.array([-0.009 * sg, 0.006, -0.013])
             d['pos'][m] += delta
         print('  grip fit: hands slid ~5 cm along the arm toward the grip point')
+        # wrist sleeve: sliding the hand left a ~5.7 cm gap between the end of the forearm armor and the hand cuff. Close it with a tube of the SAME radius
+        # (3.3 cm) from the forearm's distal ring to the hand's proximal ring, skinned over 4 rings forearm bone -> hand bone, so nothing is stretched or deformed.
+        bp = {k: angle_arms(prims[k]['pos'], prims[k]['nrm'], prims[k]['jnt'], prims[k]['wgt'])[0] for k in ('cirith_body_armor', 'cirith_body_trim_armor')}
+        bj = {k: prims[k] for k in bp}
+        P, Nn, U, J, Wt, F = [], [], [], [], [], []
+        for sg, side in ((1.0, 'r'), (-1.0, 'l')):
+            a = np.array([sg * 0.83, 0.0, -0.55]); a /= np.linalg.norm(a)
+            ids = [_names.index(side + '_foretwist'), _names.index(side + '_foretwist1')]
+            fa = np.concatenate([bp[k][np.isin(np.take_along_axis(bj[k]['jnt'], np.argmax(bj[k]['wgt'], 1)[:, None], 1)[:, 0], ids) & (bp[k][:, 0] * sg > 0.3)] for k in bp])
+            tip = fa[(fa @ a) > (fa @ a).max() - 0.02]; c1 = tip.mean(0)
+            # texture the sleeve exactly like the forearm armor it continues: mean UV of the main-atlas forearm verts nearest the tip
+            k0 = 'cirith_body_armor'; m0 = np.isin(np.take_along_axis(bj[k0]['jnt'], np.argmax(bj[k0]['wgt'], 1)[:, None], 1)[:, 0], ids) & (bp[k0][:, 0] * sg > 0.3)
+            q0 = bp[k0][m0]; near = np.argsort(-(q0 @ a))[:10]; uvt = fix_uv(bj[k0]['uv'], bj[k0]['idx'])[m0][near].mean(0); uvt = np.array([0.332, 0.371 * 0.25])   # her grey skin patch (the forearm-tip UV landed on pure black)
+            hm = d['pos'][:, 0] * sg > 0.3; hh = d['pos'][hm]; pr = hh[(hh @ a) < (hh @ a).min() + 0.02]; c2 = pr.mean(0)
+            r1 = np.linalg.norm((tip - c1) - ((tip - c1) @ a)[:, None] * a, axis=1).mean(); r2 = np.linalg.norm((pr - c2) - ((pr - c2) @ a)[:, None] * a, axis=1).mean()
+            t = c2 - c1; L = np.linalg.norm(t); t /= L
+            e1 = np.cross(t, [0, 1.0, 0]); e1 /= np.linalg.norm(e1); e2 = np.cross(t, e1)
+            nseg, nring = 16, 4; base = len(P) + len(d['pos']); f_id = _names.index(side + '_foretwist1'); h_id = _names.index(side + '_hand')
+            for k in range(nring):
+                f = k / (nring - 1); cen = c1 - t * 0.004 + (c2 + t * 0.004 - (c1 - t * 0.004)) * f; rad = (r1 * (1 - f) + r2 * f) * 1.04
+                for i in range(nseg):
+                    ph = 2 * np.pi * i / nseg; rv = np.cos(ph) * e1 + np.sin(ph) * e2
+                    P.append(cen + rad * rv); Nn.append(rv); U.append(uvt)
+                    J.append([f_id, h_id, 0, 0]); Wt.append([1 - f, f, 0, 0])
+            for k in range(nring - 1):
+                for i in range(nseg):
+                    a0 = base + k * nseg + i; a1 = base + k * nseg + (i + 1) % nseg; b0 = a0 + nseg; b1 = a1 + nseg
+                    for tri in ((a0, b0, a1), (a1, b0, b1)):
+                        pn = np.cross(np.array(P[tri[1] - len(d['pos'])]) - np.array(P[tri[0] - len(d['pos'])]), np.array(P[tri[2] - len(d['pos'])]) - np.array(P[tri[0] - len(d['pos'])]))
+                        F.append(tri if pn @ np.array(Nn[tri[0] - len(d['pos'])]) > 0 else (tri[0], tri[2], tri[1]))
+            print(f'  wrist sleeve {side}: gap {L * 100:.1f} cm, radius {r1 * 100:.1f} -> {r2 * 100:.1f} cm')
+        d['pos'] = np.concatenate([d['pos'], np.array(P)]); d['nrm'] = np.concatenate([d['nrm'], np.array(Nn)]); d['uv'] = np.concatenate([d['uv'], np.array(U)])
+        d['jnt'] = np.concatenate([d['jnt'], np.array(J)]); d['wgt'] = np.concatenate([d['wgt'], np.array(Wt, dtype=d['wgt'].dtype)]); d['idx'] = np.concatenate([d['idx'], np.array(F)]); d['al'] = np.concatenate([d['al'], np.full(len(P), 255, np.uint8)])
     return d
 slots = [(n, merged(n)) for n in ('cirith_body_armor', 'cirith_legs_armor', 'cirith_hands_armor', 'cirith_head_armor')]
 with open('out_rig/slots.bin', 'wb') as f:
