@@ -41,6 +41,21 @@ class P
         foreach (var m in M.LoadedAssets.OfType<Metamesh>()) MM[m.Name] = m;
         foreach (var m in M.LoadedAssets.OfType<SkeletalAnimation>()) AN[m.Name] = m;
         Skel = M.LoadedAssets.OfType<Skeleton>().First(x => x.Name == "human_skeleton");
+        if (a[1] == "wdiag")
+        {   // wdiag <metamesh names...> : LODs, vertex counts, bounding boxes, material + texture names, vertex-stream features (weapon import research)
+            foreach (var n in a.Skip(2))
+            {
+                if (!MM.TryGetValue(n, out var mm)) { Console.WriteLine("MISSING " + n); continue; }
+                Console.WriteLine($"== {n}: meshes={mm.Meshes.Count} cloth={mm.ClothMetamesh} variations={mm.Variations.Count}");
+                foreach (var me in mm.Meshes)
+                {
+                    var vs = me.VertexStream?.Data; var mat = M.GetAsset(me.Material.Guid) as Material;
+                    Console.WriteLine($"  lod={me.Lod} name={me.Name} verts={me.VertexCount} faces={me.FaceCount} bbox={me.BoundingBox.Min}..{me.BoundingBox.Max} material={mat?.Name} skinned={(vs?.BoneWeights != null && vs.BoneWeights.Length > 0 && vs.BoneWeights.Any(w => w.W1 > 0))} unknown2={me.UnknownInt2} skinSize={me.SkinDataSize}");
+                    if (mat != null) foreach (var td in mat.Textures) Console.WriteLine($"     tex[{td.Key}] {(M.GetAsset(td.Value.Guid) as Texture)?.Name}");
+                }
+            }
+            return;
+        }
         if (a[1] == "diag") { Diag(); return; }
         if (a[1] == "tex") { foreach (var p in M.LoadedPackages) foreach (var t in p.Items.OfType<Texture>().Where(t => t.Name.Contains(a[2]))) Console.WriteLine($"{t.Name} pkg={p.File.Name} pixels={t.HasPixelData} fmt={t.Format} {t.Width}x{t.Height} guid={t.Guid}"); return; }
         if (a[1] == "seg") { foreach (var t in M.LoadedAssets.OfType<Texture>().Where(t => t.Name == a[2])) { Console.WriteLine(t.Name + " segs=" + t.TypelessDataSegments.Count + " mips=" + t.MipmapCount + " arr=" + t.ArrayCount); foreach (var ud in t.UnknownDependences) Console.WriteLine("  DEP " + ud.UnknownGuid1 + " " + ud.UnknownGuid2 + " " + ud.UnknownGuid3 + " -> " + M.GetAsset(ud.UnknownGuid1)?.Name + " | " + M.GetAsset(ud.UnknownGuid2)?.Name + " | " + M.GetAsset(ud.UnknownGuid3)?.Name); foreach (var g in t.TypelessDataSegments) { var bf = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public; var ty = g.GetType(); Console.WriteLine("  " + ty.GetGenericArguments()[0].Name + " owner=" + g.OwnerGuid + " off=" + ty.BaseType.GetField("_offset", bf)?.GetValue(g) + " actual=" + ty.BaseType.GetField("_actualSize", bf)?.GetValue(g) + " stored=" + ty.BaseType.GetField("_storageSize", bf)?.GetValue(g) + " fmt=" + ty.BaseType.GetField("_storageFormat", bf)?.GetValue(g)); } } return; }
@@ -188,19 +203,19 @@ class P
         if (a[1] == "armorpack")
         {
             // armorpack <slots.bin> <out.tpac> : Cirith slot meshes (from transplant/dump_slots.py) -> new metameshes cloned from vanilla armor templates
-            var tmpl = new Dictionary<string, string> { ["cirith_body_armor"] = "armor_roman_mail_shirt", ["cirith_legs_armor"] = "empire_plate_armor_boots", ["cirith_hands_armor"] = "mail_mitten_a", ["cirith_head_armor"] = "armor_merchant_helmet_a" };
+            var tmpl = new Dictionary<string, string> { ["cirith_sword"] = "vlandia_onehanded_sword_a", ["cirith_body_armor"] = "armor_roman_mail_shirt", ["cirith_legs_armor"] = "empire_plate_armor_boots", ["cirith_hands_armor"] = "mail_mitten_a", ["cirith_head_armor"] = "armor_merchant_helmet_a" };
             var pk = new AssetPackage(Guid.NewGuid());
             // ---- Cirith's own material + diffuse texture (flat normal / neutral spec / no team-colour from base-game defaults)
             Guid cirithMat = Guid.Empty;
             if (File.Exists(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(a[2])), "..", "..", "enginesim", "tex", "cirith_main.dxt5")) || Environment.GetEnvironmentVariable("CIRITH_TEX") != null)
             {
                 var texFile = Environment.GetEnvironmentVariable("CIRITH_TEX") ?? Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(a[2])), "..", "..", "enginesim", "tex", "cirith_main.dxt5"));
-                var tmplMat = M.LoadedAssets.OfType<Material>().First(m => m.Name == "imperial_lamellar_a_alpha");
+                var tmplMat = M.LoadedAssets.OfType<Material>().First(m => m.Name == (Environment.GetEnvironmentVariable("CIRITH_TMPLMAT") ?? "imperial_lamellar_a_alpha"));
                 var tmplTex = (Texture)M.GetAsset(tmplMat.Textures[0].Guid);
                 using (var tr = new BinaryReader(File.OpenRead(texFile)))
                 {
                     int tw = tr.ReadInt32(), th = tr.ReadInt32(), tmips = tr.ReadInt32(); var mipData = new byte[1][][]; mipData[0] = new byte[tmips][]; for (int i = 0; i < tmips; i++) mipData[0][i] = tr.ReadBytes(tr.ReadInt32());
-                    var oldTexGuid = tmplTex.Guid; tmplTex.Guid = Guid.NewGuid(); tmplTex.Name = "cirith_main_d"; tmplTex.Width = (uint)tw; tmplTex.Height = (uint)th; tmplTex.MipmapCount = (byte)tmips; tmplTex.ArrayCount = 1; tmplTex.Source = ""; tmplTex.Format = TextureFormat.DXT5;
+                    var oldTexGuid = tmplTex.Guid; tmplTex.Guid = Guid.NewGuid(); tmplTex.Name = Environment.GetEnvironmentVariable("CIRITH_TEXNAME") ?? "cirith_main_d"; tmplTex.Width = (uint)tw; tmplTex.Height = (uint)th; tmplTex.MipmapCount = (byte)tmips; tmplTex.ArrayCount = 1; tmplTex.Source = ""; tmplTex.Format = TextureFormat.DXT5;
                     var oldSeg = tmplTex.TypelessDataSegments.First(); var BFt = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
                     var pd = new TexturePixelData { RawImage = mipData, PrimaryRawImage = mipData[0][0] };
                     var pl = new ExternalLoader<TexturePixelData>(pd); pl.OwnerGuid = oldSeg.OwnerGuid == oldTexGuid ? tmplTex.Guid : oldSeg.OwnerGuid;
@@ -209,8 +224,8 @@ class P
                     tmplTex.TypelessDataSegments[0] = pl; tmplTex.TexturePixels = pl;
                     Console.WriteLine($"texture cirith_main_d {tw}x{th} mips={tmips} oldSegType={oldSeg.GetType().GetGenericArguments()[0].Name} oldSegOwnerIsTex={oldSeg.OwnerGuid == oldTexGuid}");
                     Texture TexByName(string nme) => M.LoadedAssets.OfType<Texture>().First(t => t.Name == nme);
-                    tmplMat.Guid = Guid.NewGuid(); tmplMat.Name = "cirith_main_mat";
-                    tmplMat.Textures[0] = new AssetDependence<Texture>(tmplTex.Guid); tmplMat.Textures[1] = new AssetDependence<Texture>(TexByName("plain_black").Guid); tmplMat.Textures[2] = new AssetDependence<Texture>(TexByName("flat_n").Guid); tmplMat.Textures[4] = new AssetDependence<Texture>(TexByName("default_specular").Guid);
+                    tmplMat.Guid = Guid.NewGuid(); tmplMat.Name = (Environment.GetEnvironmentVariable("CIRITH_TEXNAME") ?? "cirith_main_d").Replace("_d", "") + "_mat";
+                    tmplMat.Textures[0] = new AssetDependence<Texture>(tmplTex.Guid); if (tmplMat.Textures.ContainsKey(1)) tmplMat.Textures[1] = new AssetDependence<Texture>(TexByName("plain_black").Guid); tmplMat.Textures[2] = new AssetDependence<Texture>(TexByName("flat_n").Guid); tmplMat.Textures[4] = new AssetDependence<Texture>(TexByName("default_specular").Guid);
                     cirithMat = tmplMat.Guid; pk.Items.Add(tmplTex); pk.Items.Add(tmplMat);
                 }
             }
@@ -290,11 +305,12 @@ class P
                   if (cp.Contains("cpos")) vs.CompressedPositions = (VertexStreamData.Half4[])tv9.CompressedPositions.Clone(); if (cp.Contains("nrm")) vs.Normals = (Vector3[])tv9.Normals.Clone(); if (cp.Contains("tt")) vs.TangentTransform = (VertexStreamData.SnormShort4[])tv9.TangentTransform.Clone(); }
                 bool faithful = a.Length > 5 && a[5] == "vtan";
                 if (faithful) { var tv = me.VertexStream.Data; vs.Colors1 = (AbstractMeshData.Color[])tv.Colors1.Clone(); vs.Colors2 = (AbstractMeshData.Color[])tv.Colors2.Clone(); vs.Uv2 = (Vector2[])tv.Uv2.Clone(); }
+                bool wpn = name.StartsWith("cirith_sword"); if (wpn) { vs.BoneIndices = new VertexStreamData.BoneIndex[0]; vs.BoneWeights = new VertexStreamData.BoneWeight[0]; }
                 var origPosCount = me.PositionCount; var origSkin = me.SkinDataSize; var origUnk2 = me.UnknownInt2; var origBox = me.BoundingBox;
                 me.VertexStream = new ExternalLoader<VertexStreamData>(vs); me.VertexStream.OwnerGuid = me.Guid; me.VertexStream.UserData[VertexStreamData.KEY_HAS_QTANGENT] = true; typeof(AbstractExternalLoader).GetField("_unknownUint", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(me.VertexStream, 1u); if (ulS.TryGetValue(me.Guid, out var us0)) fU.SetValue(me.VertexStream, us0); { int ix0 = mm.TypelessDataSegments.IndexOf(oldStream); mm.TypelessDataSegments[ix0] = me.VertexStream; }
                 var uniq = pos.Select(p => (MathF.Round(p.X * 1e4f), MathF.Round(p.Y * 1e4f), MathF.Round(p.Z * 1e4f))).Distinct().Count();
                 void Set(string prop, int v) => typeof(Mesh).GetProperty(prop).GetSetMethod(true).Invoke(me, new object[] { v });
-                Set("VertexCount", n); Set("FaceCount", nf); Set("PositionCount", uniq); Set("SkinDataSize", uniq); Set("VertexKeyCount", 0);
+                Set("VertexCount", n); Set("FaceCount", nf); Set("PositionCount", uniq); Set("SkinDataSize", wpn ? 0 : uniq); Set("VertexKeyCount", 0);
                 me.UnknownInt2 = used.Count;
                 var mn = new Vector3(float.MaxValue); var mxv = new Vector3(float.MinValue); foreach (var p in pos) { mn = Vector3.Min(mn, p); mxv = Vector3.Max(mxv, p); }
                 me.BoundingBox = new BoundingBox { Min = mn, Max = mxv };
@@ -307,7 +323,7 @@ class P
                         typeof(AbstractExternalLoader).GetField("_unknownUint", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(l2, 1u);
                         if (ulS.TryGetValue(m.Guid, out var us1)) fU.SetValue(l2, us1); m.VertexStream = l2; mm.TypelessDataSegments.Add(l2);
                         void SetM(string prop, int v) => typeof(Mesh).GetProperty(prop).GetSetMethod(true).Invoke(m, new object[] { v });
-                        SetM("VertexCount", n); SetM("FaceCount", nf); SetM("PositionCount", uniq); SetM("SkinDataSize", uniq); SetM("VertexKeyCount", 0); m.UnknownInt2 = used.Count; m.BoundingBox = me.BoundingBox;
+                        SetM("VertexCount", n); SetM("FaceCount", nf); SetM("PositionCount", uniq); SetM("SkinDataSize", wpn ? 0 : uniq); SetM("VertexKeyCount", 0); m.UnknownInt2 = used.Count; m.BoundingBox = me.BoundingBox;
                     }
                     // consistent MeshEditData (unique positions, per-position bones, same vertex/face order as the stream)
                     var ed = new MeshEditData(); var pkey = new Dictionary<(float, float, float), int>(); var plist = new List<Vector4>(); var blist = new List<MeshEditData.Bone>();
@@ -323,7 +339,7 @@ class P
                         var Nv = nrm[i]; var Tv = new Vector3(tan[i].X, tan[i].Y, tan[i].Z); var Bv = Vector3.Cross(Nv, Tv) * tan[i].W;
                         evs[i] = new MeshEditData.Vertex { PositionIndex = (uint)pi, Normal = new Vector4(Nv, 1f), Tangent = new Vector4(Tv, 1f), Binormal = new Vector4(Bv, 1f), Padding = new Vector4(Nv, 1f), Uv = uv[i], SecondUv = Vector2.Zero, Color = new AbstractMeshData.Color { R = 255, G = 255, B = 255, A = 255 }, SecondColor = new AbstractMeshData.Color { R = 255, G = 255, B = 255, A = 255 } };
                     }
-                    ed.Positions = plist.ToArray(); ed.Vertices = evs; ed.Bones = blist.ToArray();
+                    ed.Positions = plist.ToArray(); ed.Vertices = evs; ed.Bones = wpn ? new MeshEditData.Bone[0] : blist.ToArray();
                     ed.Faces = new MeshEditData.Face[nf]; for (int f = 0; f < nf; f++) ed.Faces[f] = new MeshEditData.Face { V0 = idx[f * 3], V1 = idx[f * 3 + 1], V2 = idx[f * 3 + 2] };
                     mm.TypelessDataSegments.RemoveAll(sg => sg is ExternalLoader<MeshEditData> && sg.OwnerGuid == m.Guid);
                     var el = new ExternalLoader<MeshEditData>(ed); el.OwnerGuid = m.Guid; if (ulE.TryGetValue(m.Guid, out var ue1)) fU.SetValue(el, ue1); m.EditData = el; mm.TypelessDataSegments.Add(el);

@@ -116,6 +116,50 @@ namespace CirithSim
         }
 
 
+
+        // ---- weapon animation test (CIRITH_WTEST=1, character cirith_sword_test): scripted idle -> walk -> run -> sprint -> charge attack -> run -> idle -> other weapon -> back; side camera frames in shots/
+        WeaponAnim wa = new WeaponAnim(); float wt = -1; int wshot; Camera wcam; float wspeed; Vec3 wpos; bool wInit; List<string> wlog = new List<string>(); string wlast = "";
+        bool WTest(float dt)
+        {
+            if (Environment.GetEnvironmentVariable("CIRITH_WTEST") != "1") return false;
+            if (wt < 0) { wt = 0; shotDir = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "shots"); Directory.CreateDirectory(shotDir); }
+            wt += dt; var ms = ScreenManager.TopScreen as MissionScreen; if (ms == null) return true;
+            try
+            {
+                if (wcam == null) wcam = Camera.CreateCamera();
+                var f = me.LookDirection; f.z = 0; f.Normalize(); var side = new Vec3(-f.y, f.x, 0); var target = me.Position + new Vec3(0, 0, 1.0f); var camPos = target + side * 3.2f + new Vec3(0, 0, 0.2f); var look = target - camPos; look.Normalize();
+                var m = Mat3.CreateMat3WithForward(ref look); m.RotateAboutSide(1.5707964f); wcam.Frame = new MatrixFrame(m, camPos); wcam.SetFovVertical(0.9f, 16f / 9f, 0.05f, 2000f);
+                typeof(MissionScreen).GetProperty("CustomCamera").SetValue(ms, wcam);
+            }
+            catch (Exception e) { SimSubModule.L("wtest cam err " + e.Message); }
+            if (!wInit) { wInit = true; wpos = me.Position; wa.UseOverrides = true; try { me.Controller = AgentControllerType.None; } catch { } }
+            // timeline: (until, speed m/s, sprint, attack-pulse, label)
+            string label; float spd = 0; bool sprint = false, att = false;
+            if (wt < 5f) { label = "settle"; }
+            else if (wt < 8f) { label = "idle"; }
+            else if (wt < 12f) { label = "walk"; spd = 1.5f; }
+            else if (wt < 16f) { label = "run"; spd = 3.8f; }
+            else if (wt < 20f) { label = "sprint"; spd = 5.6f; sprint = true; }
+            else if (wt < 20.1f) { label = "sprint+attack"; spd = 5.6f; sprint = true; att = true; }
+            else if (wt < 24f) { label = "charge attack"; sprint = true; spd = 0; }
+            else if (wt < 27f) { label = "run again"; spd = 3.8f; }
+            else if (wt < 30f) { label = "idle again"; }
+            else if (wt < 33f) { label = "other weapon"; }
+            else { label = "cirith again"; }
+            if (wt >= 30f && wt < 30.1f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon2, Agent.WeaponWieldActionType.Instant, false); SimSubModule.L("wtest: wielded the vanilla sword (slot 2)"); } catch (Exception e) { SimSubModule.L("wield err " + e.Message); } }
+            if (wt >= 33f && wt < 33.1f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); SimSubModule.L("wtest: wielded cirith_sword again (slot 0)"); } catch (Exception e) { SimSubModule.L("wield err " + e.Message); } }
+            if (wt >= 4.5f && wt < 4.6f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); } catch { } }
+            wa.SprintHeldOverride = sprint; wa.AttackPressedOverride = att;
+            if (spd > 0) { try { var f0 = me.LookDirection; f0.z = 0; f0.Normalize(); var np = me.Position + f0 * (spd * dt); np.z = me.Position.z; me.TeleportToPosition(np); } catch { } }
+            if (label != wlast) { wlast = label; SimSubModule.L($"wtest phase '{label}' at {wt:0.0}s; wielded={WeaponAnim.WieldedId(me, out _) ?? "other"} state={wa.Current}"); }
+            wa.Update(me, dt);
+            // frames: 4 per phase after settle
+            float[] marks = { 6.5f, 7.8f, 9f, 10.2f, 11.5f, 13f, 14.2f, 15.5f, 17f, 18.2f, 19.5f, 20.6f, 21.3f, 22f, 22.7f, 23.4f, 25f, 26.5f, 28.5f, 29.5f, 31.5f, 32.5f, 34f };
+            if (wshot < marks.Length && wt >= marks[wshot]) { Shot($"w_{wshot:00}_{label.Replace(' ', '_').Replace('+', '_')}"); SimSubModule.L($"wtest shot {wshot} state={wa.Current} hand={(WeaponAnim.WieldedId(me, out _))}"); wshot++; }
+            if (wt > 35f) { SimSubModule.L("wtest done"); Utilities.ExitProcess(0); }
+            return true;
+        }
+
         // ---- charge test (CIRITH_CHARGETEST=1): she is ordered to walk-run 60 m ahead; speed is measured 2 s before and during the charge; side camera frames are written to shots/.
         Charge charge = new Charge(); float ct = -1; Vec3 cStart; float sA, sB; int nA, nB; int cshot; bool cOrdered, cTrig, cDone; Camera ccam; Vec3 lastP;
         string RunSim() { try { float acc = 0, mx = 0; var arr = new float[32]; me.GetRunningSimulationDataUntilMaximumSpeedReached(ref acc, ref mx, arr); return $"engine running simulation: top speed {mx:0.00} m/s, time to reach {acc:0.00} s"; } catch (Exception e) { return "runsim err " + e.Message; } }
@@ -257,6 +301,7 @@ namespace CirithSim
                 if (me != null) { try { charge.Update(me, dt, ct > 10f && !cDone && Environment.GetEnvironmentVariable("CIRITH_CHARGETEST") == "1"); } catch (Exception ce) { if (!chargeErr) { chargeErr = true; SimSubModule.L("charge err " + ce); } } }
                 if (me != null && ChargeTick(dt)) { }
                 if (me != null) { try { jig.Update(me, dt); } catch (Exception je) { if (!jigErr) { jigErr = true; SimSubModule.L("jiggle err " + je); } } }
+                if (me != null && WTest(dt)) { try { jig.Update(me, dt); } catch { } return; }
                 if (me != null && Environment.GetEnvironmentVariable("CIRITH_CHARGETEST") == "1") return;
                 if (me != null && MotionTick(dt)) return;
                 if (me != null && ViewQueueTick(dt)) return;

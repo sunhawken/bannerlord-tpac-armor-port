@@ -1,13 +1,14 @@
 """retarget_anim.py - bake one of Cirith's KUF animations (C_DS_NZ.glb, default anim 4 = CHARGE / STEP_FORWARD) onto Bannerlord's 28-bone human_skeleton.
 Method: per mapped bone, world-space rotation change of the KUF bone (anim * rest^-1) is applied to the Bannerlord bone's rest world rotation, then converted to
 parent-relative local rotations (rotations only; the pelvis also gets the vertical bob, scaled by the pelvis-height ratio). Un-mapped bones (twist helpers, toes, finger0,
-ponytail) keep their rest local rotation.  Output: enginesim/CirithSim/module/ModuleData/cirith_charge.json  { fps, frames:[[ [9 floats] x28 ]...], pelvis_dz:[...] }
+ponytail) keep their rest local rotation.  Output: enginesim/CirithSim/module/ModuleData/cirith_anim_' + OUTNAME + '.json  { fps, frames:[[ [9 floats] x28 ]...], pelvis_dz:[...] }
 usage: python retarget_anim.py [anim_index]"""
 import sys, json, numpy as np
 from glbio import Glb
 from pose import Rig, qmat
 
 ANIM = int(sys.argv[1]) if len(sys.argv) > 1 else 4
+OUTNAME = sys.argv[2] if len(sys.argv) > 2 else 'charge'
 SRC = r'C:\Users\Trey\Downloads\DFG\bare\C_DS_NZ.glb'          # read only
 gk = Glb(SRC); rk = Rig(gk); gb = Glb('out_rig/cirith_armor_rigged.glb'); rb = Rig(gb)
 kn = [gk.j['nodes'][i]['name'] for i in rk.joints]; bn = [gb.j['nodes'][i]['name'] for i in rb.joints]
@@ -33,7 +34,7 @@ hk = Pk_rest[1][1] - Pk_rest[23][1]; hb = Pb_rest[0][1] - Pb_rest[3][1]; SCALE =
 a = rk.anims[ANIM]; dur = a['dur']; FPS = 30.0; nfr = max(2, int(round(dur * FPS)))
 print('anim', ANIM, a['name'], 'dur', dur, 'frames', nfr, 'scale', round(SCALE, 4), 'KUF pelvis h', round(hk, 2), 'BL', round(hb, 3))
 S = np.diag([-1.0, 1.0, -1.0])      # KUF faces +z, Bannerlord faces -z (glTF world): her model is turned 180 deg about the vertical axis (Cirith L -> Bannerlord r): deltas transform as Q R Q
-frames = []; dz = []
+frames = []; dz = []; rootpos = []; footz = []
 Wrest_local_t = [np.array(gb.j['nodes'][j].get('translation', [0, 0, 0]), float) for j in rb.joints]
 for f in range(nfr):
     t = f / FPS * (dur / (nfr / FPS)) if False else f / FPS
@@ -49,12 +50,17 @@ for f in range(nfr):
         P = Wd[par[b]] if par[b] >= 0 else Rroot
         loc.append((P.T @ Wd[b]).ravel().tolist())               # local rotation (3x3 row-major; columns = images of the local axes)
     frames.append(loc)
+    rootpos.append(Pk[1].copy()); footz.append(float((Pk[23] - Pk[1])[2]))
     # pelvis vertical bob (glTF Y is up): bob relative to rest, scaled
     dz.append(float((Pk[1][1] - Pk_rest[1][1]) * SCALE))
 dz = np.array(dz); dz -= dz.mean()                                # keep the cycle centred on the rest height
 out = dict(anim=ANIM, name=a['name'], fps=FPS, scale=SCALE, bones=bn, frames=frames, pelvis_dz=dz.round(5).tolist())
 pass
-print('wrote cirith_charge.json', nfr, 'frames x', len(bn), 'bones; pelvis bob range', dz.min().round(3), dz.max().round(3))
+rp = np.array(rootpos); disp = (rp[-1] - rp[0]) * SCALE; hs = float(np.hypot(disp[0], disp[2])) / (dur * (nfr - 1) / nfr) if nfr > 1 else 0.0
+natv = 2 * (max(footz) - min(footz)) * SCALE / dur   # body speed implied by the gait (2 steps per cycle, step = foot peak-to-peak)
+print(f'gait: foot peak-to-peak {(max(footz)-min(footz))*SCALE:.2f} m -> natural locomotion speed ~{natv:.2f} m/s')
+print(f'root (pelvis) travel over the clip: {np.round(disp, 3).tolist()} m -> {hs:.2f} m/s horizontal ({"ROOT MOTION" if hs > 0.3 else "in place"})')
+print('wrote cirith_anim_' + OUTNAME + '.json', nfr, 'frames x', len(bn), 'bones; pelvis bob range', dz.min().round(3), dz.max().round(3))
 
 # ---- resample to 60 fps (slerp) and write the plain-text version the DLL reads:  "fps N nbones" then per frame: dz r00..r22 x28
 from scipy.spatial.transform import Rotation as Rot, Slerp
@@ -63,7 +69,9 @@ tt = np.clip(tt, 0, src_t[-1]); dense = np.zeros((NT, len(bn), 3, 3))
 for b in range(len(bn)):
     dense[:, b] = Slerp(src_t, Rot.from_matrix(F[:, b])) (tt).as_matrix()
 dzd = np.interp(tt, src_t, dz)
-with open('../enginesim/CirithSim/module/ModuleData/cirith_charge.txt', 'w') as fh:
-    fh.write(f'60 {NT} {len(bn)}\n')
-    for i in range(NT): fh.write(f'{dzd[i]:.5f} ' + ' '.join(f'{x:.6f}' for x in dense[i].ravel()) + '\n')
-print('wrote cirith_charge.txt', NT, 'frames @60fps')
+# cumulative pelvis travel relative to frame 0: forward (KUF +z = Bannerlord forward) and lateral (KUF x mirrored)
+rp0 = rp - rp[0]; rfw = np.interp(tt, src_t, rp0[:, 2]) * SCALE; rlat = -np.interp(tt, src_t, rp0[:, 0]) * SCALE
+with open('../enginesim/CirithSim/module/ModuleData/cirith_anim_' + OUTNAME + '.txt', 'w') as fh:
+    fh.write(f'60 {NT} {len(bn)} {hs:.3f} {natv:.3f}' + chr(10))
+    for i in range(NT): fh.write(f'{dzd[i]:.5f} {rfw[i]:.5f} {rlat[i]:.5f} ' + ' '.join(f'{x:.6f}' for x in dense[i].ravel()) + chr(10))
+print('wrote cirith_anim_' + OUTNAME + '.txt', NT, 'frames @60fps')

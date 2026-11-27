@@ -16,4 +16,60 @@
     <ItemComponent><Armor head_armor="5" covers_head="true" material_type="Cloth" /></ItemComponent>
     <Flags />
   </Item>
+  <Item id="cirith_dresstest" name="Cloth Test Dress" mesh="cirith_clothtest" culture="Culture.vlandia" subtype="body_armor" weight="3" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="10" leg_armor="5" covers_body="true" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <!-- CLOTHVARS -->
+  <Item id="cirith_dressvar_0" name="Cloth Var 0" mesh="cirith_clothvar_0" culture="Culture.vlandia" subtype="body_armor" weight="3" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="10" leg_armor="5" covers_body="true" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_dressvar_1" name="Cloth Var 1" mesh="cirith_clothvar_1" culture="Culture.vlandia" subtype="body_armor" weight="3" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="10" leg_armor="5" covers_body="true" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_dressvar_2" name="Cloth Var 2" mesh="cirith_clothvar_2" culture="Culture.vlandia" subtype="body_armor" weight="3" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="10" leg_armor="5" covers_body="true" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_dressvar_3" name="Cloth Var 3" mesh="cirith_clothvar_3" culture="Culture.vlandia" subtype="body_armor" weight="3" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="10" leg_armor="5" covers_body="true" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_dressvar_4" name="Cloth Var 4" mesh="cirith_clothvar_4" culture="Culture.vlandia" subtype="body_armor" weight="3" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="10" leg_armor="5" covers_body="true" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_dressvar_5" name="Cloth Var 5" mesh="cirith_clothvar_5" culture="Culture.vlandia" subtype="body_armor" weight="3" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="10" leg_armor="5" covers_body="true" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_dressvar_6" name="Cloth Var 6" mesh="cirith_clothvar_6" culture="Culture.vlandia" subtype="body_armor" weight="3" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="10" leg_armor="5" covers_body="true" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <Item id="cirith_dressvar_7" name="Cloth Var 7" mesh="cirith_clothvar_7" culture="Culture.vlandia" subtype="body_armor" weight="3" difficulty="0" appearance="1" Type="BodyArmor">
+    <ItemComponent><Armor body_armor="10" leg_armor="5" covers_body="true" covers_legs="true" material_type="Cloth" /></ItemComponent>
+    <Flags />
+  </Item>
+  <!-- /CLOTHVARS -->
+  <!-- her own KUF weapon (E_DS_NZ_R): imported mesh/texture, stats of a fast one-handed sword -->
+  <Item id="cirith_sword" name="Cirith's Blade" mesh="cirith_sword" culture="Culture.vlandia" weight="1.1" difficulty="0" appearance="1" value="1500" Type="OneHandedWeapon" recalculate_body="true">
+    <ItemComponent>
+      <Weapon weapon_class="OneHandedSword" weapon_balance="95" thrust_speed="95" speed_rating="96" missile_speed="0" weapon_length="92" thrust_damage="24" thrust_damage_type="Pierce" swing_damage="32" swing_damage_type="Cut" item_usage="onehanded_block_shield_swing_thrust" physics_material="metal_weapon">
+        <WeaponFlags MeleeWeapon="true" />
+      </Weapon>
+    </ItemComponent>
+    <Flags />
+  </Item>
+  <!-- same weapon, but the engine attaches it to the OFF-HAND bone (ForceAttachOffHandPrimaryItemBone): used while sprinting, see src/WeaponAnim.cs -->
+  <Item id="cirith_sword_l" name="Cirith's Blade (left hand)" mesh="cirith_sword" culture="Culture.vlandia" weight="1.1" difficulty="0" appearance="1" value="1500" Type="OneHandedWeapon" recalculate_body="true">
+    <ItemComponent>
+      <Weapon weapon_class="OneHandedSword" weapon_balance="95" thrust_speed="95" speed_rating="96" missile_speed="0" weapon_length="92" thrust_damage="24" thrust_damage_type="Pierce" swing_damage="32" swing_damage_type="Cut" item_usage="onehanded_block_shield_swing_thrust" physics_material="metal_weapon">
+        <WeaponFlags MeleeWeapon="true" />
+      </Weapon>
+    </ItemComponent>
+    <Flags ForceAttachOffHandPrimaryItemBone="true" />
+  </Item>
 </Items>
