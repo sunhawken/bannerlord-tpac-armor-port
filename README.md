@@ -123,10 +123,16 @@ With the alpha-tested material you can make parts of an atlas transparent. `tran
 pixels, and clears only the near-black pixels connected to a gem through black within N px, so gold trim and the gems stay. `MetaMesh.GetCopy(name,false,true).HasClothData()`
 (in the sim mod) is a cheap way to ask the engine what it thinks of a mesh.
 
+### Motion test for cloth (verified method)
+`CIRITH_MOTION=1`: the sim slides the (player-controlled) agent with `TeleportToPosition` at 3.5 m/s for 4 s, stops dead, and a side free-camera saves a frame every 0.2 s.
+**Always run a positive control** - the same test with a vanilla cloth item (`vlandian_woman_dress`) shows the skirt lagging while moving and settling after the stop.
+Your mesh must show the same lag; mine (flag + params + alpha only) stayed perfectly rigid, i.e. no simulation without the cooked data below.
+
 ## 5. Not solved: in-game cloth / jiggle
 The engine does recognise the mesh flag + per-mesh `ClothingMaterial` + vertex-alpha weights (`HasClothData() == True` for the packed body/head meshes), but whether it *simulates* without the cooked data is unconfirmed, and vanilla cloth armor also has more: Vanilla cloth armor also has
 (a) a separate simplified `clo_<name>` metamesh whose mesh carries an extra compiled data segment (type `b97e0f10-...`, ~80 KB for a dress) and
-(b) a `ClothMappingData` segment (`af41613e-...`, ~22 bytes per render vertex) on the render mesh plus a dependency link. Both are compiled binary formats that this
+(b) a `ClothMappingData` segment (`af41613e-...`, ~22 bytes per render vertex) on the render mesh plus a dependency link. Findings so far on the cook blob (`b97e0f10`): header `[magic][edgeCount][vertCount][constraintSets][?][indexCount]`, then count-prefixed arrays (AABB, edge rest lengths, u16-pair edges,
+per-colour constraint batches, vertex permutation, bending quads...). The magic differs per mesh (looks like a float/hash) and is the blocker. A standalone cloth mesh (`campaign_flag`) needs only the cook blob, no mapping. Both are compiled binary formats that this
 project has not decoded yet. PRs / findings welcome.
 
 ## 6. Layout

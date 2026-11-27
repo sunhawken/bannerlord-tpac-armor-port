@@ -87,6 +87,31 @@ namespace CirithSim
         float t, tFound = -1; bool camSet, shot, bearingSet; static float Dist => float.TryParse(Environment.GetEnvironmentVariable("CIRITH_DIST"), out var v) ? v : 3.0f; static float Az => float.TryParse(Environment.GetEnvironmentVariable("CIRITH_AZ"), out var v) ? v : 0f; Vec3 CamSide() { return new Vec3(0, 0, 0); } Agent me;
 
 
+
+        // ---- motion test (cloth/jiggle): CIRITH_MOTION=1 -> she walks/runs forward, stops dead, a side camera grabs a frame every 0.2 s -> shots/mot_NN.bmp
+        float mt = -1; int mshot; bool moving, stopped; Camera mcam; float nextShot; Vec3 startPos;
+        bool MotionTick(float dt)
+        {
+            if (Environment.GetEnvironmentVariable("CIRITH_MOTION") != "1") return false;
+            if (mt < 0) { mt = 0; mshot = 0; nextShot = 7.0f; startPos = me.Position; shotDir = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "shots"); Directory.CreateDirectory(shotDir); SimSubModule.L("motion test start"); }
+            mt += dt; var ms = ScreenManager.TopScreen as MissionScreen; if (ms == null) return true;
+            // she is player-controlled and ignores scripted positions, so slide her with TeleportToPosition at constant velocity for 4 s (cloth reacts to world motion), then stop dead
+            if (mt > 5f && mt <= 9.2f) { try { var f0 = me.LookDirection; f0.z = 0; f0.Normalize(); var np = me.Position + f0 * (3.5f * dt); np.z = me.Position.z; me.TeleportToPosition(np); } catch (Exception e) { if (!moving) SimSubModule.L("teleport err " + e.Message); } moving = true; }
+            if (mt > 9.2f && !stopped) { stopped = true; SimSubModule.L("motion: stop"); }
+            try
+            {
+                if (mcam == null) mcam = Camera.CreateCamera();
+                var f = me.LookDirection; f.z = 0; f.Normalize(); var side = new Vec3(-f.y, f.x, 0);     // camera to her left, looking at her
+                var target = me.Position + new Vec3(0, 0, 1.0f); var camPos = target + side * 3.2f + new Vec3(0, 0, 0.2f); var look = target - camPos; look.Normalize();
+                var m = Mat3.CreateMat3WithForward(ref look); m.RotateAboutSide(1.5707964f); mcam.Frame = new MatrixFrame(m, camPos); mcam.SetFovVertical(0.9f, 16f / 9f, 0.05f, 2000f);
+                typeof(MissionScreen).GetProperty("CustomCamera").SetValue(ms, mcam);
+            }
+            catch (Exception e) { SimSubModule.L("motion cam err " + e.Message); }
+            if (mt >= nextShot && mshot < 45) { try { Utilities.TakeScreenshot(Path.Combine(shotDir, $"mot_{mshot:00}.bmp")); } catch { } SimSubModule.L($"mot {mshot} t={mt:0.00} pos={me.Position}"); mshot++; nextShot += 0.2f; }
+            if (mshot >= 45) { SimSubModule.L("motion done"); Utilities.ExitProcess(0); }
+            return true;
+        }
+
         // ---- scripted free-cam: CIRITH_VIEWS=<file>  lines "name az elev dist height fov" (az rad offset from behind-her, elev rad, dist m added, height m added, fov deg or 0)
         Camera cam; static float height(float h) { return h; }
         List<string[]> views; int vi = -1; float vt; string shotDir;
@@ -134,6 +159,7 @@ namespace CirithSim
             try
             {
                 if (me == null) me = Mission.Current.Agents.FirstOrDefault(a => a.Character != null && a.Character.StringId == SimSubModule.Target);
+                if (me != null && MotionTick(dt)) return;
                 if (me != null && ViewQueueTick(dt)) return;
                 if (me != null && !camSet && t > 3f)
                 {
