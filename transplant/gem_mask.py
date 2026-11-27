@@ -79,7 +79,9 @@ _hz = hp['pos'][hp['idx']][:, :, 2].mean(1); _hx = np.abs(hp['pos'][hp['idx']][:
 col_sel = hp['idx'][(_hz > 1.40) & (_hz < 1.56) & (_hx < 0.30)]
 cut_hip = _outside_black_tris([(uv.astype(float), hip_sel)], 'hips')
 cut_col = _outside_black_tris([(hp['uv'].astype(float), col_sel)], 'collar')
-cut_pend = cut_pend | cut_hip | cut_col
+br_sel = f[(_cz >= 1.20) & (_cz < 1.52) & (np.abs(p[f][:, :, 0]).mean(1) < 0.19)]
+cut_br = _outside_black_tris([(uv.astype(float), br_sel)], 'breast gems/bead net')
+cut_pend = cut_pend | cut_hip | cut_col | cut_br
 clear = clear | cut_pend | cut_ear
 im[clear, 3] = 0
 # colour of the transparent texels = nearest opaque texel (no dark halo when filtered)

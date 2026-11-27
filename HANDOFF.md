@@ -65,3 +65,6 @@ Cause: only the torso skin block of the atlas got the gamma lift (lum ~89); the 
 
 ## UPDATE 2026-11-26 (hips + collar black transparency)
 gem_mask.py _outside_black_tris(): flood the TRUE black (lum<24, sat<30 - the dark-grey skin of the same islands is lum ~40+ and must stay) from the border of the hip-band triangles (body z .78-1.2) and the collar triangles (head slot z 1.40-1.56) inwards, never across non-black texels, and keep a 2 px opaque rim around every gold/teal/bead texel (halo) so DXT5 alpha blocks and mips do not erase thin details. Result: see-through gaps between the fringe beads, gems and gold intact. Not touched: the black back panel (centre back, gold diamond top) and the black collar band inside its gold outline.
+
+## UPDATE (breast gems)
+Same protected outside-black cut applied to the breast bead net / gems (body tris z 1.2-1.52, |x|<0.19) in gem_mask.py.

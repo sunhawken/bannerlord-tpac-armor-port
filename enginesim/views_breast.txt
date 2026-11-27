@@ -1,0 +1,3 @@
+breast_front 0 0.0 0.9 1.3 0
+breast_34 0.6 0.05 0.9 1.3 0
+breast_side 1.4 0.05 0.9 1.3 0
