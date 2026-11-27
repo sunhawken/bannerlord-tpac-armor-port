@@ -57,11 +57,12 @@ namespace CirithSim
             var pLoc = ToLoc(rHead, pivot);
             Vec3 cw = gf.origin + DirPar(gr, aChest.origin), pw = gf.origin + DirPar(gr, aPelv.origin), hw = gf.origin + DirPar(gr, ToPar(aHead, pLoc));
             Vec3 cA = Vec3.Zero, pA = Vec3.Zero, hA = Vec3.Zero;
-            if (have && rawDt > 0.1f) { cV = (cw - cW) / rawDt; pV = (pw - pW) / rawDt; hV = (hw - hW) / rawDt; }   // frame hitch (screenshot): re-sync velocity, no acceleration
+            if (have && (rawDt > 0.1f || (cw - cW).Length > 0.6f || (pw - pW).Length > 0.6f || (hw - hW).Length > 0.6f)) { cV = (cw - cW) / rawDt; pV = (pw - pW) / rawDt; hV = (hw - hW) / rawDt; }   // frame hitch (screenshot): re-sync velocity, no acceleration
             else if (have) { float k = 1f - (float)Math.Exp(-dt / 0.07f); var cv = Vec3.Lerp(cV, (cw - cW) / rawDt, k); var pv = Vec3.Lerp(pV, (pw - pW) / rawDt, k); var hv = Vec3.Lerp(hV, (hw - hW) / rawDt, k); cA = (cv - cV) / dt; pA = (pv - pV) / dt; hA = (hv - hV) / dt; cV = cv; pV = pv; hV = hv; }
             else { cV = pV = hV = Vec3.Zero; u = DirPar(gr, Dir(new Vec3(0, -0.12f, -1f))); om = Vec3.Zero; have = true; }
             cW = cw; pW = pw; hW = hw;
-            float lim = 25f;
+            bool vr = CirithVR.Active; float lim = vr ? 10f : 25f;            // VR: head/body tracking and snap moves must not shake the springs
+            if (vr) hA *= 0.35f;
             Func<Vec3, Vec3> clampA = a => { float l = a.Length; return l > lim ? a * (lim / l) : a; };
             cA = clampA(cA); pA = clampA(pA); hA = clampA(hA);
             // world accel -> model space (inverse entity rotation) -> bone-local axes
@@ -81,9 +82,10 @@ namespace CirithSim
             var Lgl = new MatrixFrame(Mat3.Identity, xGl); Put(iGl, aPelv.TransformToParent(Lgl.TransformToParent(rPelv.TransformToLocal(rGl))));
             var Lgr = new MatrixFrame(Mat3.Identity, xGr); Put(iGr, aPelv.TransformToParent(Lgr.TransformToParent(rPelv.TransformToLocal(rGr))));
             var r0L = DirLoc(rHead.rotation, Dir(new Vec3(0, -0.12f, -1f))); var uL = DirLoc(aHead.rotation, DirLoc(gr, u));
-            var ax = Vec3.CrossProduct(r0L, uL); float sn = ax.Length, cs = Vec3.DotProduct(r0L, uL); float ang = (float)Math.Atan2(sn, cs); ang = Math.Min(ang, 0.8f);
+            var ax = Vec3.CrossProduct(r0L, uL); float sn = ax.Length, cs = Vec3.DotProduct(r0L, uL); float ang = (float)Math.Atan2(sn, cs); ang = Math.Min(ang, vr ? 0.5f : 0.8f);
             MatrixFrame Lp = sn > 1e-5f ? Rod(ax, ang, pLoc) : MatrixFrame.Identity;
             Put(iPon, aHead.TransformToParent(Lp.TransformToParent(rHead.TransformToLocal(rPon))));
+            if (float.IsNaN(xBr.x + xGl.x + xGr.x + vBr.x + vGl.x + vGr.x + om.x + u.x) || float.IsInfinity(xBr.x + xGl.x + xGr.x)) { xBr = vBr = xGl = vGl = xGr = vGr = Vec3.Zero; om = Vec3.Zero; u = DirPar(gr, Dir(new Vec3(0, -0.12f, -1f))); SimSubModule.L("jiggle: reset after a numeric blow-up"); }
             sk.UpdateEntitialFramesFromLocalFrames();
             if (Environment.GetEnvironmentVariable("CIRITH_JIGLOG") == "2" && cV.Length > 0.3f && dbg++ < 80) SimSubModule.L($"tick dt={dt:0.0000} rawstep={(cw - cW).Length:0.0000} speedF={cV.Length:0.00} cA={cA.Length:0.0}");
             if (n++ % 30 == 1 && Environment.GetEnvironmentVariable("CIRITH_JIGLOG") == "1") SimSubModule.L($"jig xBr={xBr} xGl={xGl} ponAng={ang * 57.3f:0.0} cA={cA} hA={hA}");

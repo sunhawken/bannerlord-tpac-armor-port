@@ -19,7 +19,8 @@ namespace CirithSim
     //   sprint            : hold the sprint key (default V) while moving forward -> her "charge / step forward" clip; x1.5 speed when the full outfit is worn.
     public class WeaponAnim
     {
-        public const string Item = "cirith_sword";
+        public const string Item = "cirith_sword", ItemVr = "cirith_sword_vr";
+        public static string ItemId => CirithVR.Active ? ItemVr : Item;
         public static InputKey SprintKey = InputKey.C;
         const float SpeedMult = 1.5f;
 
@@ -50,7 +51,7 @@ namespace CirithSim
 
         public static bool IsWielding(Agent a)
         {
-            try { var pi = a.GetPrimaryWieldedItemIndex(); return pi != EquipmentIndex.None && a.Equipment[pi].Item?.StringId == Item; } catch { return false; }
+            try { var pi = a.GetPrimaryWieldedItemIndex(); return pi != EquipmentIndex.None && (a.Equipment[pi].Item?.StringId == Item || a.Equipment[pi].Item?.StringId == ItemVr); } catch { return false; }
         }
         static bool WearsOutfit(Agent a)
         {
@@ -114,6 +115,19 @@ namespace CirithSim
             }
             return best;
         }
+        // VR: no clips, no proxy sword, no bone overrides - only the sprint state (key C) for the x1.5 boost
+        void VrTick(Agent me, float dt)
+        {
+            ShowProxy(me, false);
+            var pos = me.Position; if (!havePos) { lastPos = pos; havePos = true; vel = Vec3.Zero; }
+            var raw = (pos - lastPos) / Math.Max(dt, 0.001f); raw.z = 0; if (dt > 0.1f || raw.Length > 12f) raw = Vec3.Zero; lastPos = pos; float k = 1f - (float)Math.Exp(-dt / 0.08f); vel = Vec3.Lerp(vel, raw, k);
+            var look = me.LookDirection; look.z = 0; if (look.LengthSquared > 1e-6f) look.Normalize();
+            float speed = vel.Length, fwd = Vec3.DotProduct(vel, look);
+            bool sprintHeld = me == Agent.Main && SafeKey(SprintKey); bool forward = fwd > 0.6f * Math.Max(speed, 0.001f) && speed > 0.2f;
+            bool want = sprintHeld && forward && speed > 1.2f;
+            if (want) Boost(me, WearsOutfit(me)); else if (boosted) Boost(me, false);
+            Current = want ? State.Sprint : State.None;
+        }
         bool engineHold;
         // jump / fall: the engine's own animation must win while she is in the air (action type on either channel, or a vertical speed the ground never produces)
         static bool JumpLike(Agent a, float vz)
@@ -143,6 +157,7 @@ namespace CirithSim
             if (!me.IsActive()) { Release(me, "dead"); Dispose(); return; }
             if (me.AgentVisuals == null) return;
             if (!IsWielding(me)) { if (Current != State.None || boosted) Release(me, "weapon no longer wielded"); ShowProxy(me, false); havePos = false; return; }
+            if (CirithVR.Active) { VrTick(me, dt); return; }
             ShowProxy(me, true);
             // ---- velocity (horizontal, smoothed)
             var pos = me.Position; if (!havePos) { lastPos = pos; havePos = true; vel = Vec3.Zero; }

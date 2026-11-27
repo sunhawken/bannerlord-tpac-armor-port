@@ -61,7 +61,16 @@
         <WeaponFlags MeleeWeapon="true" />
       </Weapon>
     </ItemComponent>
-    <Flags ForceAttachOffHandPrimaryItemBone="true" />
+    <!-- (the left-hand attach flag was removed: the sword is now a RIGHT-hand weapon, so the engine holds the item - and its hit volume - in the right hand) -->
+  </Item>
+  <!-- VR variant (BannerlordVR loaded): the same weapon with its VISIBLE mesh, drawn by the engine like any normal weapon in the right hand; the DLL swaps cirith_sword for it when VR is detected -->
+  <Item id="cirith_sword_vr" name="Cirith's Blade (VR)" mesh="cirith_sword" culture="Culture.vlandia" weight="1.1" difficulty="0" appearance="1" value="1500" Type="OneHandedWeapon" body_name="bo_sword_one_handed" item_holsters="sword_left_hip">
+    <ItemComponent>
+      <Weapon weapon_class="OneHandedSword" weapon_balance="95" thrust_speed="95" speed_rating="96" missile_speed="0" weapon_length="150" thrust_damage="24" thrust_damage_type="Pierce" swing_damage="32" swing_damage_type="Cut" item_usage="onehanded_block_shield_swing_thrust" physics_material="metal_weapon">
+        <WeaponFlags MeleeWeapon="true" />
+      </Weapon>
+    </ItemComponent>
+    <!-- (the left-hand attach flag was removed: the sword is now a RIGHT-hand weapon, so the engine holds the item - and its hit volume - in the right hand) -->
   </Item>
   <Item id="cirith_probe" name="Axis probe" mesh="cirith_probe" culture="Culture.vlandia" weight="1.1" difficulty="0" appearance="1" value="1500" Type="OneHandedWeapon" body_name="bo_sword_one_handed" item_holsters="sword_left_hip">
     <ItemComponent>

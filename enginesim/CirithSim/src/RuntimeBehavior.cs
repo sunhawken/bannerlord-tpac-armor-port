@@ -20,8 +20,39 @@ namespace CirithSim
             return false;
         }
         int lastVoice = -1; bool ctlSet; TaleWorlds.Engine.Camera acam; string shotDir; int lastShot = -1; float life; bool autoDone, gWas, giveTested;
-        static bool HasSword(Agent a) { try { for (var i = EquipmentIndex.Weapon0; i <= EquipmentIndex.Weapon3; i++) if (a.Equipment[i].Item?.StringId == WeaponAnim.Item) return true; } catch { } return false; }
-        static void Wield(Agent a, bool on) { try { if (on) { for (var i = EquipmentIndex.Weapon0; i <= EquipmentIndex.Weapon3; i++) if (a.Equipment[i].Item?.StringId == WeaponAnim.Item) { a.TryToWieldWeaponInSlot(i, Agent.WeaponWieldActionType.WithAnimation, false); break; } } else a.TryToSheathWeaponInHand(Agent.HandIndex.MainHand, Agent.WeaponWieldActionType.WithAnimation); } catch (Exception e) { SimSubModule.L("wield err " + e.Message); } }
+        static bool HasSword(Agent a) { try { for (var i = EquipmentIndex.Weapon0; i <= EquipmentIndex.Weapon3; i++) { var id = a.Equipment[i].Item?.StringId; if (id == WeaponAnim.Item || id == WeaponAnim.ItemVr) return true; } } catch { } return false; }
+        // VR: the hidden-mesh item becomes its visible twin so the ENGINE draws it like any normal right-hand weapon (replaced in place - nothing is dropped)
+        static void VrSwap(Agent a)
+        {
+            try
+            {
+                var it = TaleWorlds.ObjectSystem.MBObjectManager.Instance.GetObject<ItemObject>(WeaponAnim.ItemVr); if (it == null) { SimSubModule.L("VR swap: item cirith_sword_vr not found"); return; }
+                var wielded = a.GetPrimaryWieldedItemIndex();
+                for (var i = EquipmentIndex.Weapon0; i <= EquipmentIndex.Weapon3; i++)
+                    if (a.Equipment[i].Item?.StringId == WeaponAnim.Item)
+                    {
+                        var mw = new MissionWeapon(it, null, null); a.EquipWeaponWithNewEntity(i, ref mw); SimSubModule.L("VR swap: " + i + " -> cirith_sword_vr");
+                        if (wielded == i) a.TryToWieldWeaponInSlot(i, Agent.WeaponWieldActionType.Instant, false);
+                    }
+            }
+            catch (Exception e) { SimSubModule.L("VR swap err " + e.Message); }
+        }
+        static void Wield(Agent a, bool on)
+        {
+            try
+            {
+                if (on)
+                {
+                    for (var i = EquipmentIndex.Weapon0; i <= EquipmentIndex.Weapon3; i++)
+                    {
+                        var id2 = a.Equipment[i].Item?.StringId;
+                        if (id2 == WeaponAnim.Item || id2 == WeaponAnim.ItemVr) { a.TryToWieldWeaponInSlot(i, Agent.WeaponWieldActionType.WithAnimation, false); break; }
+                    }
+                }
+                else a.TryToSheathWeaponInHand(Agent.HandIndex.MainHand, Agent.WeaponWieldActionType.WithAnimation);
+            }
+            catch (Exception e) { SimSubModule.L("wield err " + e.Message); }
+        }
         static bool SafeCtrl() { try { return TaleWorlds.InputSystem.Input.IsKeyDown(TaleWorlds.InputSystem.InputKey.LeftControl) || TaleWorlds.InputSystem.Input.IsKeyDown(TaleWorlds.InputSystem.InputKey.RightControl); } catch { return false; } }
         bool cWas; bool SafeCombo() { try { bool d = SafeCtrl() && TaleWorlds.InputSystem.Input.IsKeyDown(TaleWorlds.InputSystem.InputKey.G); bool r = d && !cWas; cWas = d; return r; } catch { return false; } }
         static void GiveSword(Agent a)
@@ -30,7 +61,7 @@ namespace CirithSim
             {
                 if (!HasSword(a))
                 {
-                    var it = TaleWorlds.ObjectSystem.MBObjectManager.Instance.GetObject<ItemObject>(WeaponAnim.Item); if (it == null) { SimSubModule.L("give sword: item not found"); return; }
+                    var it = TaleWorlds.ObjectSystem.MBObjectManager.Instance.GetObject<ItemObject>(WeaponAnim.ItemId); if (it == null) { SimSubModule.L("give sword: item not found"); return; }
                     EquipmentIndex slot = EquipmentIndex.None;
                     for (var i = EquipmentIndex.Weapon0; i <= EquipmentIndex.Weapon3; i++) if (a.Equipment[i].IsEmpty) { slot = i; break; }
                     if (slot == EquipmentIndex.None) { slot = EquipmentIndex.Weapon3; a.RemoveEquippedWeapon(slot); }
@@ -106,7 +137,7 @@ namespace CirithSim
                 // hand-held weapon: drawn automatically once at the start, key G draws / sheathes it (number keys are the order menu in a battle)
                 if (m != null && m.IsActive() && m.AgentVisuals != null && HasSword(m))
                 {
-                    if (!autoDone && life > 2f) { autoDone = true; Wield(m, true); SimSubModule.L("runtime: sword drawn automatically"); }
+                    if (!autoDone && life > 2f) { autoDone = true; if (CirithVR.Active) VrSwap(m); else Wield(m, true); SimSubModule.L("runtime: sword drawn automatically"); }
                     if (!SafeCtrl() && SafeG()) { bool on = WeaponAnim.IsWielding(m); Wield(m, !on); SimSubModule.L("runtime: key G -> sword " + (on ? "sheathed" : "drawn")); }
                 }
                 if (Environment.GetEnvironmentVariable("CIRITH_ATTACKTEST") == "1" && m != null && m.IsActive())
