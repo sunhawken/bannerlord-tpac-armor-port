@@ -4,6 +4,8 @@ from PIL import Image
 import os
 a0 = Image.open('tex/atlas1_gems.png' if (os.environ.get('EDITED_TEXTURE') == '1' and os.path.exists('tex/atlas1_gems.png')) else 'tex/atlas1.png').convert('RGBA')   # gems version = black around the hip gems cut out (transform/gem_mask.py)
 a1 = Image.open('tex/atlas2.png').convert('RGBA')
+if os.environ.get('BLACKKEY') == '1':      # black-is-transparent cut-outs (blackkey.py): both atlases keyed, colour-bled
+    a0 = Image.open('tex/atlas1_cut.png').convert('RGBA'); a1 = Image.open('tex/atlas2_cut.png').convert('RGBA')
 # layout (512x1024): atlas0 rows 0..255 | 16px gutter replicating atlas0's last row | atlas1 rows 272..783 | rest replicates atlas1's last row.
 # The gutters stop bilinear/mip filtering from bleeding the orange trim atlas into the bottom edge of the main atlas (her fingers sit there).
 atlas = Image.new('RGBA', (512, 1024), (0, 0, 0, 255)); atlas.paste(a0, (0, 0))
