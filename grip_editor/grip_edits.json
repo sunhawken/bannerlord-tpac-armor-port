@@ -1,17 +1,140 @@
 {
  "version": 3,
- "note": "made on the exact game mesh (carried from a version 2 file)",
+ "note": "version 3",
  "clips": {
   "idle": {
    "pos": [
-    -2.77,
-    0.39,
-    -2.31
+    -2.5,
+    1,
+    -0.5
    ],
    "rot": [
     -19.2,
     0.2,
     -1.1
+   ],
+   "adj": [
+    {
+     "bone": "spine",
+     "rot": [
+      -9.2,
+      10,
+      9.7
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "spine1",
+     "rot": [
+      -0.7,
+      -20,
+      -1.9
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "r_clavicle",
+     "rot": [
+      9.8,
+      -19.9,
+      -9.4
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "l_hand",
+     "rot": [
+      0.3,
+      6.4,
+      -21
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "r_upperarm_twist",
+     "rot": [
+      20.6,
+      5.6,
+      -32.1
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "l_foretwist",
+     "rot": [
+      0.1,
+      2.4,
+      4.8
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "r_foretwist",
+     "rot": [
+      23.9,
+      -35.4,
+      26.3
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": true
+    },
+    {
+     "bone": "r_hand",
+     "rot": [
+      -7.2,
+      5.5,
+      -16.5
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "spine2",
+     "rot": [
+      0,
+      -0.6,
+      -2.8
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "neck",
+     "rot": [
+      -0.1,
+      -1.7,
+      -15.3
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "l_upperarm_twist",
+     "rot": [
+      -0.5,
+      -17.9,
+      -7.5
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    }
    ]
   },
   "walk": {
@@ -24,6 +147,41 @@
     -19.2,
     0.2,
     -1.1
+   ],
+   "adj": [
+    {
+     "bone": "r_upperarm_twist",
+     "rot": [
+      0.2,
+      21.6,
+      -5.1
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "l_upperarm_twist",
+     "rot": [
+      -1.2,
+      -17.3,
+      -8.7
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "r_thigh",
+     "rot": [
+      -0.1,
+      -4.9,
+      -3.7
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    }
    ]
   },
   "run": {
@@ -36,6 +194,41 @@
     -19.2,
     0.2,
     -1.1
+   ],
+   "adj": [
+    {
+     "bone": "r_hand",
+     "rot": [
+      0,
+      0.9,
+      -0.4
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "r_foretwist",
+     "rot": [
+      0,
+      10.3,
+      -3.3
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    },
+    {
+     "bone": "r_upperarm_twist",
+     "rot": [
+      0,
+      5,
+      0.6
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    }
    ]
   },
   "sprint": {
@@ -48,6 +241,19 @@
     -19.2,
     0.2,
     -1.1
+   ],
+   "adj": [
+    {
+     "bone": "r_upperarm_twist",
+     "rot": [
+      1.3,
+      21.8,
+      -10
+     ],
+     "center": -1,
+     "width": 14,
+     "iso": false
+    }
    ]
   }
  }

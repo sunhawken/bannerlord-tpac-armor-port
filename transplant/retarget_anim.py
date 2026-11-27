@@ -118,6 +118,13 @@ def _write(path, D):
         fh.write(f'60 {NT} {len(bn)} {hs:.3f} {natv:.3f} {len(wins)}' + ''.join(f' {a:.3f} {b:.3f}' for a, b in wins) + chr(10))
         for i in range(NT): fh.write(f'{dzd[i]:.5f} {rfw[i]:.5f} {rlat[i]:.5f} ' + ' '.join(f'{x:.6f}' for x in D[i].ravel()) + chr(10))
 if not MIRROR: _write('out_rig/anim_base/cirith_anim_' + OUTNAME + '_base.txt', dense)      # raw retarget = what the editor starts from
+HELPER = {k for k, n in enumerate(bn) if n.endswith('twist1')}                                    # twist helper bones: they ride with their parent so the limb stays one solid piece
+def _iso_children(bi):                                                                            # (child, helper) pairs that must cancel a 'move only this joint' change; helper = twist helper in between or None
+    out = []
+    for c in range(len(bn)):
+        if par[c] == bi and c not in HELPER: out.append((c, None))
+        elif par[c] == bi and c in HELPER: out += [(g, c) for g in range(len(bn)) if par[g] == c and g not in HELPER]
+    return out
 for adj in ADJ:                                                                                   # bake the editor's joint adjustments (same maths as the editor preview)
     bi = bn.index(adj['bone']); c = adj.get('center', -1); wd = max(float(adj.get('width', 12)), 1.0); R = np.array(adj['rot'], float)
     for i in range(NT):
@@ -127,7 +134,9 @@ for adj in ADJ:                                                                 
         if w > 1e-3:
             Rw = _rxyz(R * w); dense[i, bi] = dense[i, bi] @ Rw
             if adj.get('iso'):                                                                     # "move only this joint": the next bones keep their world orientation -> pre-multiply the inverse
-                for ch in [c for c in range(len(bn)) if par[c] == bi]: dense[i, ch] = Rw.T @ dense[i, ch]
+                for ch, hp in _iso_children(bi):
+                    Cm = Rw.T if hp is None else dense[i, hp].T @ Rw.T @ dense[i, hp]                  # through a twist helper the change is conjugated by the helper's own local rotation
+                    dense[i, ch] = Cm @ dense[i, ch]
 with open('../enginesim/CirithSim/module/ModuleData/cirith_anim_' + OUTNAME + '.txt', 'w') as fh:
     fh.write(f'60 {NT} {len(bn)} {hs:.3f} {natv:.3f} {len(wins)}' + ''.join(f' {a:.3f} {b:.3f}' for a, b in wins) + chr(10))
     for i in range(NT): fh.write(f'{dzd[i]:.5f} {rfw[i]:.5f} {rlat[i]:.5f} ' + ' '.join(f'{x:.6f}' for x in dense[i].ravel()) + chr(10))

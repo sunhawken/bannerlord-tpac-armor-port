@@ -182,8 +182,8 @@ function adjWeight(a, f, n) { if (a.center == null || a.center < 0) return 1; le
 function adjQuat(a, f, n) { const w = adjWeight(a, f, n); eu.set(a.rot[0] * toRad * w, a.rot[1] * toRad * w, a.rot[2] * toRad * w, 'XYZ'); return new THREE.Quaternion().setFromEuler(eu); }
 function animQuat(i, f, c) { const k = f * c.nb * 9 + i * 9, r = c.rot; m4.set(r[k], r[k + 1], r[k + 2], 0, r[k + 3], r[k + 4], r[k + 5], 0, r[k + 6], r[k + 7], r[k + 8], 0, 0, 0, 0, 1); return new THREE.Quaternion().setFromRotationMatrix(m4); }
 // local rotation of a bone at frame f = clip rotation * (all adjustments of that bone, in list order, except `skip`)
-function boneLocalQuat(name, f, skip) { const c = clipsData.clips[clip]; const q = animQuat(BONES.indexOf(name), f, c); const pn = bones[name] && bones[name].parent ? bones[name].parent.name : '';
-  for (const a of (edits[clip].adj || [])) if (a.iso && a.bone === pn && a !== skip) q.premultiply(adjQuat(a, f, c.n).invert());           // 'move only this joint': the parent's change is cancelled here
+function boneLocalQuat(name, f, skip) { const c = clipsData.clips[clip]; const q = animQuat(BONES.indexOf(name), f, c); const isH = n => /twist1$/.test(n); let pn = bones[name] && bones[name].parent ? bones[name].parent.name : '', hq = null; if (isH(name)) pn = ''; else if (isH(pn) && bones[pn].parent) { hq = animQuat(BONES.indexOf(pn), f, c); pn = bones[pn].parent.name; }   // twist helpers ride with their limb; the next real joint cancels
+  for (const a of (edits[clip].adj || [])) if (a.iso && a.bone === pn && a !== skip) q.premultiply(hq ? hq.clone().invert().multiply(adjQuat(a, f, c.n).invert()).multiply(hq) : adjQuat(a, f, c.n).invert());           // 'move only this joint': the parent's change is cancelled here
   for (const a of (edits[clip].adj || [])) if (a !== skip && a.bone === name) q.multiply(adjQuat(a, f, c.n)); return q; }
 function apply() {
   const c = clipsData.clips[clip]; const f = Math.max(0, Math.min(c.n - 1, Math.floor(frame))); const o = f * c.nb * 9;
