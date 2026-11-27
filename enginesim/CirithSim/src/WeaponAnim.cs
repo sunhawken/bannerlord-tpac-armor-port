@@ -46,7 +46,7 @@ namespace CirithSim
         public bool SprintHeldOverride, UseOverrides;   // used by the headless test only
         int calibLog = 0, calibTick, dbgN;
         // ---- our own sword mesh, attached to the left-hand BONE of the skeleton with the exact grip frame computed from her original files (the engine's own weapon attachment ignores bone overrides, so it is hidden while we drive the arm)
-        MatrixFrame grip = MatrixFrame.Identity; bool gripLoaded; bool engineWeaponHidden;
+        MatrixFrame grip = MatrixFrame.Identity, gripR = MatrixFrame.Identity; bool gripLoaded; bool engineWeaponHidden;
 
         public static bool IsWielding(Agent a)
         {
@@ -64,7 +64,7 @@ namespace CirithSim
                 bool mir = Environment.GetEnvironmentVariable("CIRITH_MIRROR") == "1"; string sfx = mir ? "_m" : ""; idle = Clip.Load("idle" + sfx); walk = Clip.Load("walk" + sfx); run = Clip.Load("run" + sfx); charge = Clip.Load("charge" + sfx); loaded = true;
                 SimSubModule.L($"weapon anim: clips loaded (idle {idle.N}, walk {walk.N}, run {run.N}, sprint {charge.N} frames @60 fps); natural speeds walk {walk.NatSpeed:0.00} run {run.NatSpeed:0.00} sprint {charge.NatSpeed:0.00} m/s");
                 try { var g = File.ReadAllText(Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip.txt")).Split(new[] { ' ', (char)10, (char)13 }, StringSplitOptions.RemoveEmptyEntries).Select(P).ToArray();
-                      grip = new MatrixFrame(new Mat3(new Vec3(g[0], g[3], g[6]), new Vec3(g[1], g[4], g[7]), new Vec3(g[2], g[5], g[8])), Vec3.Zero); gripLoaded = true; LoadEdits(); SimSubModule.L($"weapon grip frame loaded: blade in l_hand frame = {g[2]:0.000},{g[5]:0.000},{g[8]:0.000}"); } catch (Exception ge) { SimSubModule.L("grip load failed: " + ge.Message); }
+                      grip = new MatrixFrame(new Mat3(new Vec3(g[0], g[3], g[6]), new Vec3(g[1], g[4], g[7]), new Vec3(g[2], g[5], g[8])), Vec3.Zero); gripLoaded = true; try { var fr = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip_r.txt"); if (File.Exists(fr)) { var q = File.ReadAllText(fr).Split(new[] { ' ', (char)10, (char)13 }, StringSplitOptions.RemoveEmptyEntries).Select(P).ToArray(); gripR = new MatrixFrame(new Mat3(new Vec3(q[0], q[3], q[6]), new Vec3(q[1], q[4], q[7]), new Vec3(q[2], q[5], q[8])), Vec3.Zero); } } catch { } LoadEdits(); SimSubModule.L($"weapon grip frame loaded: blade in l_hand frame = {g[2]:0.000},{g[5]:0.000},{g[8]:0.000}"); } catch (Exception ge) { SimSubModule.L("grip load failed: " + ge.Message); }
                 var k = Environment.GetEnvironmentVariable("CIRITH_SPRINTKEY"); if (!string.IsNullOrEmpty(k) && Enum.TryParse(k, true, out InputKey kk)) SprintKey = kk;
             }
             catch (Exception e) { SimSubModule.L("weapon anim load failed: " + e.Message); }
@@ -113,7 +113,7 @@ namespace CirithSim
             bool forward = fwd > 0.6f * Math.Max(speed, 0.001f) && speed > 0.2f;
             // ---- state machine (the engine's combat actions always win: no override while attacking / blocking)
             State want;
-            engineHold = EngineBusy(me);
+            engineHold = EngineBusy(me) || Environment.GetEnvironmentVariable("CIRITH_FORCEHOLD") == "1";
             if (engineHold) want = State.None;
             else if (sprintHeld && forward && speed > 1.2f) want = State.Sprint;
             else if (speed < 0.25f) want = State.Idle;
@@ -233,9 +233,9 @@ namespace CirithSim
             {
                 var gf = me.AgentVisuals.GetEntity().GetGlobalFrame(); var hf = me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame(19);
                 var world = gf.TransformToParent(hf.TransformToParent(EditedGrip()));
-                if (engineHold)      // the engine's own attack/block/guard animation holds the (invisible) item in the combat hand: the visible sword follows that item instead of the left-hand grip
+                if (engineHold)      // the engine's own attack/block/guard animation moves the combat (right) hand: the visible sword sits in that hand, same grip as the left one but mirrored
                 {
-                    try { var pi = me.GetPrimaryWieldedItemIndex(); if (pi != EquipmentIndex.None) { var we = me.GetWeaponEntityFromEquipmentSlot(pi); if (we.IsValid) world = we.GetGlobalFrame(); } } catch { }
+                    var hr = me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame(26); world = gf.TransformToParent(hr.TransformToParent(gripR));
                 }
                 swordEnt.SetGlobalFrame(ref world, false);
                 if (Environment.GetEnvironmentVariable("CIRITH_GRIPLOG") == "1" && dbgN++ % 40 == 0 && clip != null)

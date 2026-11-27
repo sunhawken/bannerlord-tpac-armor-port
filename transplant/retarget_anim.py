@@ -63,6 +63,10 @@ if not MIRROR:
     E_ = np.stack([[0, 1, 0], [0, 0, 1], [1, 0, 0]], 1).astype(float)
     Bn = Rb_rest[19].T @ S @ Rk_rest[20] @ E_; u_, _, vt_ = np.linalg.svd(Bn); Bn = u_ @ vt_
     open('../enginesim/CirithSim/module/ModuleData/cirith_grip.txt', 'w').write(' '.join(f'{x:.6f}' for x in Bn.ravel()) + chr(10))
+    Mm = np.diag([-1.0, 1.0, 1.0]); Wm = Mm @ (Rb_rest[19] @ Bn); Wm[:, 0] *= -1                       # the same grip mirrored across the body's mid plane (guard flipped to keep a proper rotation)
+    Br = Rb_rest[26].T @ Wm; u2, _, v2 = np.linalg.svd(Br); Br = u2 @ v2                                 # sword axes in the RIGHT (combat) hand frame: used while the engine's own attack/block animation runs
+    open('../enginesim/CirithSim/module/ModuleData/cirith_grip_r.txt', 'w').write(' '.join(f'{x:.6f}' for x in Br.ravel()) + chr(10))
+    print('right-hand grip: blade', Br[:, 2].round(3), 'det', round(float(np.linalg.det(Br)), 3))
     json.dump(dict(X=Bn[:, 0].round(6).tolist(), Y=Bn[:, 1].round(6).tolist(), Z=Bn[:, 2].round(6).tolist()), open('../grip_editor/data/grip_l.json', 'w'))
     print('sword grip in l_hand frame: blade', Bn[:, 2].round(3), 'thin', Bn[:, 1].round(3), 'guard', Bn[:, 0].round(3), 'det', round(float(np.linalg.det(Bn)), 3))
 Wrest_local_t = [np.array(gb.j['nodes'][j].get('translation', [0, 0, 0]), float) for j in rb.joints]
