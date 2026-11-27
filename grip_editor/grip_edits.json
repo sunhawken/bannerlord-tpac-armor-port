@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "note": "sword placement per pose: pos = offset in cm along her left-hand bone axes, rot = degrees (Euler XYZ) about the sword own axes",
+  "clips": {
+    "idle": {
+      "pos": [
+        -14,
+        -15,
+        -2
+      ]
+    },
+    "walk": {
+      "pos": [
+        -14,
+        -14,
+        0
+      ]
+    },
+    "run": {
+      "pos": [
+        -15.5,
+        -14.5,
+        -0.5
+      ]
+    },
+    "sprint": {}
+  }
+}
