@@ -88,6 +88,24 @@ namespace CirithSim
 
 
 
+
+        // ---- bone-control probe: CIRITH_BONETEST="name:dx,dy,dz" lifts that bone (model space, relative to its CURRENT animated frame) every tick, to learn whether SetBoneLocalFrame sticks to the render
+        int boneTestIdx = -2;
+        void BoneTest()
+        {
+            var bt = Environment.GetEnvironmentVariable("CIRITH_BONETEST"); if (string.IsNullOrEmpty(bt)) return;
+            try
+            {
+                var sk = me.AgentVisuals.GetSkeleton(); var parts = bt.Split(':'); var d = parts[1].Split(',').Select(x => float.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                if (boneTestIdx == -2) { boneTestIdx = -1; for (int i = 0; i < sk.GetBoneCount(); i++) if (sk.GetBoneName((sbyte)i) == parts[0]) boneTestIdx = i; SimSubModule.L("bonetest bone " + parts[0] + " = " + boneTestIdx); }
+                if (boneTestIdx < 0) return;
+                var ent = sk.GetBoneEntitialFrame((sbyte)boneTestIdx); ent.origin += new Vec3(d[0], d[1], d[2]);
+                sbyte par = sk.GetParentBoneIndex((sbyte)boneTestIdx); var pe = sk.GetBoneEntitialFrame(par); var local = pe.TransformToLocal(ent);
+                sk.SetBoneLocalFrame((sbyte)boneTestIdx, local); sk.UpdateEntitialFramesFromLocalFrames();
+            }
+            catch (Exception e) { SimSubModule.L("bonetest err " + e.Message); }
+        }
+
         // ---- motion test (cloth/jiggle). CIRITH_MOTION=1 -> slide + stop, side camera, frames in shots/.
         // CIRITH_VARIANTS="itemA,itemB,..." (with CIRITH_MOTION=1) runs MANY variants in ONE game session: for each item the Body slot is swapped at runtime, she slides 3 s and stops dead,
         // frames v<idx>_<k>.bmp are written at 4 moments. One boot (~45 s) then ~9 s per variant instead of ~100 s per run.
@@ -147,6 +165,10 @@ namespace CirithSim
             if (views == null)
             {
                 views = File.ReadAllLines(vf).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("#")).Select(l => l.Split(new[] { ' ', '	' }, StringSplitOptions.RemoveEmptyEntries)).ToList();
+                foreach (var ty in new[] { typeof(Skeleton), typeof(MBAgentVisuals) })
+                    foreach (var mi in ty.GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+                        if (mi.Name.Contains("Bone") || mi.Name.Contains("Frame") || mi.Name.Contains("Morph") || mi.Name.Contains("Cloth") || mi.Name.Contains("Entitial") || mi.Name.Contains("Local") || mi.Name.Contains("Mesh"))
+                            SimSubModule.L("API " + ty.Name + "." + mi.Name + "(" + string.Join(", ", mi.GetParameters().Select(x => x.ParameterType.Name + " " + x.Name)) + ") -> " + mi.ReturnType.Name);
                 foreach (var mi in typeof(Agent).GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
                     if (mi.Name.StartsWith("Set") && (mi.Name.Contains("Movement") || mi.Name.Contains("Look") || mi.Name.Contains("Target") || mi.Name.Contains("Scripted") || mi.Name.Contains("Position") || mi.Name.Contains("Control")) || mi.Name.Contains("Teleport") || mi.Name.Contains("Force"))
                         SimSubModule.L("AGENT API " + mi.Name + "(" + string.Join(", ", mi.GetParameters().Select(x => x.ParameterType.Name + " " + x.Name)) + ")");
@@ -184,6 +206,7 @@ namespace CirithSim
             try
             {
                 if (me == null) me = Mission.Current.Agents.FirstOrDefault(a => a.Character != null && a.Character.StringId == SimSubModule.Target);
+                if (me != null) BoneTest();
                 if (me != null && MotionTick(dt)) return;
                 if (me != null && ViewQueueTick(dt)) return;
                 if (me != null && !camSet && t > 3f)

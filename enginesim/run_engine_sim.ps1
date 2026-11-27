@@ -6,7 +6,7 @@
   usage:  .\run_engine_sim.ps1 [-Char cirith_test] [-Scene battle_terrain_a] [-ShotDelay 8] [-Timeout 150]
   output: enginesim\out\engine_<char>.png, enginesim\out\engine_<char>.log
 #>
-param([string]$Char = 'cirith_test', [string]$Scene = 'battle_terrain_a', [int]$ShotDelay = 8, [int]$Timeout = 150, [switch]$KeepOpen, [switch]$Visible, [string]$Views = '')
+param([string]$Char = 'cirith_test', [string]$Scene = 'battle_terrain_a', [int]$ShotDelay = 8, [int]$Timeout = 150, [switch]$KeepOpen, [switch]$Visible, [string]$Views = '', [string]$ExtraModules = '')
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $game = 'S:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord'
@@ -29,7 +29,7 @@ function Set-CleanExit { if (Test-Path $ecfg) { (Get-Content $ecfg) -replace '^s
 Set-CleanExit
 # sim runs: no motion blur / depth of field in screenshots (the user's own engine_config.txt is restored afterwards)
 $origCfg = $null
-if (-not $Visible -and (Test-Path $ecfg)) { $origCfg = Get-Content $ecfg -Raw; (Get-Content $ecfg) -replace '^postfx_motion_blur\s*=\s*\d+','postfx_motion_blur = 0' -replace '^postfx_dof\s*=\s*\d+','postfx_dof = 0' | Set-Content $ecfg }
+if (-not $Visible -and (Test-Path $ecfg)) { $origCfg = Get-Content $ecfg -Raw; (Get-Content $ecfg) -replace '^postfx_motion_blur\s*=\s*\d+','postfx_motion_blur = 0' -replace '^postfx_dof\s*=\s*\d+','postfx_dof = 0' -replace '^disable_sound\s*=\s*\d+','disable_sound = 1' | Set-Content $ecfg }
 
 Add-Type @'
 using System; using System.Runtime.InteropServices;
@@ -45,7 +45,8 @@ if ($Views) { $env:CIRITH_VIEWS = (Resolve-Path $Views).Path } else { $env:CIRIT
 Remove-Item (Join-Path $mod 'shots') -Recurse -Force -ErrorAction SilentlyContinue
 # --- launch
 $env:CIRITH_CHAR = $Char; $env:CIRITH_SCENE = $Scene
-$args = '/singleplayer _MODULES_*Native*SandBoxCore*CustomBattle*CirithSim*_MODULES_'
+$mods = if ($ExtraModules) { 'Native*SandBoxCore*Sandbox*StoryMode*CustomBattle*' + $ExtraModules + '*CirithSim' } else { 'Native*SandBoxCore*CustomBattle*CirithSim' }
+$args = "/singleplayer _MODULES_*$mods*_MODULES_"
 if ($Visible) {
   $env:CIRITH_CHAR = $Char; $env:CIRITH_SCENE = $Scene; $env:CIRITH_NOCAM = '1'
   $p = Start-Process -FilePath (Join-Path $bin 'Bannerlord.exe') -ArgumentList $args -WorkingDirectory $bin -PassThru
@@ -53,9 +54,10 @@ if ($Visible) {
   return
 }
 # run the game on its OWN hidden desktop: no window on the user's desktop, and it cannot grab the user's mouse/keyboard
-$desk = [Dsk]::CreateDesktopW('CirithSimDesk', [IntPtr]::Zero, [IntPtr]::Zero, 0, 0x000F01FF, [IntPtr]::Zero)
+$deskName = "CirithSimDesk_" + [guid]::NewGuid().ToString('N').Substring(0,6)
+$desk = [Dsk]::CreateDesktopW($deskName, [IntPtr]::Zero, [IntPtr]::Zero, 0, 0x000F01FF, [IntPtr]::Zero)
 if ($desk -eq [IntPtr]::Zero) { throw "CreateDesktop failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())" }
-$si = New-Object Dsk+STARTUPINFO; $si.cb = [Runtime.InteropServices.Marshal]::SizeOf($si); $si.lpDesktop = 'CirithSimDesk'
+$si = New-Object Dsk+STARTUPINFO; $si.cb = [Runtime.InteropServices.Marshal]::SizeOf($si); $si.lpDesktop = $deskName
 $pi = New-Object Dsk+PROCESS_INFORMATION
 $exe = Join-Path $bin 'Bannerlord.exe'
 if (-not [Dsk]::CreateProcess($exe, "`"$exe`" $args", [IntPtr]::Zero, [IntPtr]::Zero, $false, 0, [IntPtr]::Zero, $bin, [ref]$si, [ref]$pi)) { throw "CreateProcess failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())" }
@@ -93,3 +95,7 @@ Start-Sleep -Milliseconds 500; [void][Dsk]::CloseDesktop($desk); if ($origCfg) {
 if (Test-Path (Join-Path $mod 'shots')) { New-Item -ItemType Directory -Force (Join-Path $out 'shots') | Out-Null; Get-ChildItem (Join-Path $mod 'shots\*.bmp') | ForEach-Object { python -c "from PIL import Image; Image.open(r'$($_.FullName)').convert('RGB').save(r'$out\shots\$($_.BaseName).png')" }; Write-Host "shots -> $out\shots" }
 if (Test-Path (Join-Path $mod 'shot.png')) { Copy-Item (Join-Path $mod 'shot.png') (Join-Path $out "engine_$Char.bmp") -Force; python -c "from PIL import Image; Image.open(r'$out\engine_$Char.bmp').save(r'$out\engine_$Char.png')" }
 if (Test-Path $log) { Copy-Item $log (Join-Path $out "engine_$Char.log") -Force; Get-Content $log | Select-Object -Last 25 } else { Write-Host 'NO LOG WRITTEN - module did not load' }
+
+
+
+
