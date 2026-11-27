@@ -9,6 +9,15 @@ a1 = Image.open('tex/atlas2.png').convert('RGBA')
 atlas = Image.new('RGBA', (512, 1024), (0, 0, 0, 255)); atlas.paste(a0, (0, 0))
 last0 = a0.crop((0, 255, 512, 256)); [atlas.paste(last0, (0, 256 + k)) for k in range(16)]
 atlas.paste(a1, (0, 272)); last1 = a1.crop((0, 511, 512, 512)); [atlas.paste(last1, (0, 784 + k)) for k in range(240)]
+# areola decal tile: 96x96 at atlas (16,800) - hard-edged near-black disc (r=30 px) with Venice detail, lighter nipple centre; everything outside the disc is alpha 0
+import numpy as np
+yy, xx = np.mgrid[0:96, 0:96]; rr = np.sqrt((xx - 47.5) ** 2 + (yy - 47.5) ** 2) / 30.0
+det = np.ones((96, 96))
+if os.path.exists('tex/areola_detail.png'):
+    sw = np.asarray(Image.open('tex/areola_detail.png').convert('L').resize((96, 96), Image.LANCZOS)).astype(float); det = np.clip(0.55 + 0.45 * sw / max(sw.mean(), 1e-3), 0.4, 1.6)
+rgb = (np.array([10, 7, 7], float)[None, None, :] * det[..., None] * (1 + 1.6 * np.clip(1 - rr / 0.30, 0, 1)[..., None]))
+tile = np.dstack([np.clip(rgb, 0, 255), np.where(rr <= 1.0, 255, 0)]).astype(np.uint8)
+atlas.paste(Image.fromarray(tile, 'RGBA'), (16, 800))
 atlas.save('tex/cirith_atlas.png')
 
 def enc_color(rgb):                                        # rgb (n,16,3) float -> (n,) uint64 8-byte DXT1 colour block

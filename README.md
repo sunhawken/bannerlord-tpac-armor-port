@@ -138,6 +138,12 @@ Findings so far on the cook blob (`b97e0f10`): header `[magic][edgeCount][vertCo
 per-colour constraint batches, vertex permutation, bending quads...). The magic differs per mesh (looks like a float/hash) and is the blocker. A standalone cloth mesh (`campaign_flag`) needs only the cook blob, no mapping. Both are compiled binary formats that this
 project has not decoded yet. PRs / findings welcome.
 
+### Batch harness (many cloth experiments in ONE game session)
+`enginesim/cloth_batch.py <label> "name:ZERO;name2:ZERO"` packs N cloned vanilla-dress variants (cook blob arrays zeroed per variant via `tool clothclone`, env `CK_ZERO`), starts the game ONCE, swaps her body item
+at runtime (`Agent.UpdateSpawnEquipmentAndRefreshVisuals`), slides/stops her per variant and writes a comparison sheet. ~45 s boot + ~9 s per variant instead of ~100 s per run.
+**Cook blob layout** (`enginesim/cookparse.py` consumes vanilla blobs exactly): `header[6] | aabb[8] | E rest lengths | E edges(u16 pairs) | T constraint-set rows (8 words) | batches2 | A(2V words) | B(V) | C perm(V) | D index list | E free weights(V) | F(V floats) | G(V words, count in bytes) | H(4V floats = per-vertex weights summing to 1) | I(V int16 pairs)`.
+Zeroing results on a simulating dress: **A, H, I essential** (cloth explodes into a rigid sheet without them), D partly, **B, C, F, G optional**; E zeroed = pinned (looks normal, no sway). A/H/I semantics still unknown.
+
 ## 6. Layout
 - `tool/` - .NET 8 console: `armorpack`, `rawstream`, `pkgdiff`, `matinfo`, `seginfo`, `vsinfo`, `blobdump`, ... (expects the game's `Modules/Native/AssetPackages` as arg 0)
 - `patches/` - TpacTool writer fixes (apply to a clone of szszss/TpacTool; the tool project references it as `TpacTool.Lib`)

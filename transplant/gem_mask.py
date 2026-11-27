@@ -52,10 +52,10 @@ print('skin px lifted', int(skin.sum()))
 # ---- very dark, bigger areolas. Both breasts share one UV spot (the body UVs are mirrored): the front-most breast vertex sits at atlas px (218,76).
 # measured texel density there: 0.36 cm/px along u, 0.30 cm/px along v -> an areola ~6.5 cm across = ellipse radii ~9 x 11 px. Detail comes from the Venice swatch if present.
 import os
-cx0, cy0, rx, ry = 218.0, 76.0, 9.2, 11.0
+cx0, cy0, rx, ry = 218.0, 76.0, 15.5, 18.5     # ~11 cm across: big and obvious
 yy, xx = np.mgrid[0:H, 0:W]
 rr = np.sqrt(((xx - cx0) / rx) ** 2 + ((yy - cy0) / ry) ** 2)
-edge = np.clip((1.15 - rr) / 0.35, 0, 1)                       # soft rim from r=0.8 to 1.15
+edge = np.clip((1.08 - rr) / 0.18, 0, 1)                       # fairly crisp rim
 detail = np.ones((H, W))
 dp = '../enginesim/tex/areola_detail.png'
 if os.path.exists(dp):
@@ -65,7 +65,7 @@ if os.path.exists(dp):
 else:
     rng = np.random.default_rng(7); n = rng.normal(1, 0.18, (H, W)); detail = np.clip(ndi.gaussian_filter(n, 0.7), 0.6, 1.4)
 nip = np.clip((1.0 - rr / 0.28), 0, 1)                         # tiny raised nipple centre, a touch lighter than the areola
-base = np.array([15, 11, 11], float)
+base = np.array([5, 3, 3], float)             # near black
 areola = base[None, None, :] * detail[..., None] * (1 + 0.55 * nip[..., None])
 a = edge[..., None]
 im[..., :3] = np.clip(im[..., :3] * (1 - a) + areola * a, 0, 255).astype(np.uint8)

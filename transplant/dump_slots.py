@@ -104,6 +104,52 @@ def merged(n):
         d['uv'] = fix_uv(d['uv'], d['idx'])
         d['uv'][:, 1] = d['uv'][:, 1] * 0.25          # main atlas = top quarter of the 512x1024 combined atlas
         col = d.get('col'); d['al'] = np.full(len(d['pos']), 255, np.uint8) if col is None else (np.clip(np.asarray(col)[:, 3] * (255.0 if np.asarray(col).dtype.kind == 'f' else 1.0), 0, 255)).astype(np.uint8)
+    if n == 'cirith_body_armor' and __import__('os').environ.get('AREOLA_DECAL') == '1':
+        # areola decals: a regular polar disc (3 rings x 16 + centre, radius R) per breast, projected onto the skin surface around the apex and pushed 6 mm out along the surface normal,
+        # UV-mapped onto the decal tile in the atlas (96x96 at (16,800), disc r = 30 px). Skinned like the skin vertex it lands on.
+        R = 0.030; push = 0.006; P_, N_, U_, J_, W_, A_, F_ = [], [], [], [], [], [], []
+        pos0, nrm0, idx0, uv0 = d['pos'], d['nrm'], d['idx'], d['uv']; uvp = uv0[idx0].mean(1) * [512, 1024]; fcen = pos0[idx0].mean(1)
+        import os as _os
+        APEX = [np.array([0.082, -0.092, 1.345]), np.array([-0.082, -0.092, 1.345])]
+        if _os.environ.get('PROBES') == '1': APEX = [np.array(v) for v in ([0.0, -0.10, 1.30], [0.0, -0.10, 1.40], [0.10, -0.09, 1.34], [-0.10, -0.09, 1.34], [0.0, -0.08, 1.15], [0.18, -0.05, 1.40])]
+        for sg_i, apex in enumerate(APEX):
+            sg = 1.0
+            cand = [t for t, c, u in zip(idx0, fcen, uvp) if np.linalg.norm(c - apex) < 0.10 and c[1] < -0.02 and not (u[0] < 110 and u[1] > 180)]
+            vs = np.unique(np.array(cand)); nz = nrm0[vs][np.linalg.norm(pos0[vs] - apex, axis=1) < 0.05].mean(0); nz /= np.linalg.norm(nz)
+            t1 = np.cross(nz, [0, 0, 1.0]); t1 /= np.linalg.norm(t1); t2 = np.cross(nz, t1)
+            def hit(o, dr):
+                best = None
+                for tri in cand:
+                    A, B, C = pos0[tri]; e1 = B - A; e2 = C - A; h = np.cross(dr, e2); det = e1 @ h
+                    if abs(det) < 1e-12: continue
+                    s_ = o - A; u = s_ @ h / det
+                    if u < 0 or u > 1: continue
+                    q = np.cross(s_, e1); v = dr @ q / det
+                    if v < 0 or u + v > 1: continue
+                    t = e2 @ q / det
+                    if best is None or t < best[0]: best = (t, tri, 1 - u - v, u, v)
+                return best
+            coords = [(0.0, 0.0)] + [(r * R * np.cos(2 * np.pi * k / 16), r * R * np.sin(2 * np.pi * k / 16)) for r in (0.34, 0.67, 1.0) for k in range(16)]
+            base = len(P_) + len(pos0); ok = True
+            for (cx, cy) in coords:
+                o = apex + t1 * cx + t2 * cy + nz * 0.06; h = hit(o, -nz)
+                if h is None: ok = False; break
+                t, tri, w0, w1, w2 = h; pp = w0 * pos0[tri[0]] + w1 * pos0[tri[1]] + w2 * pos0[tri[2]]; nn = w0 * nrm0[tri[0]] + w1 * nrm0[tri[1]] + w2 * nrm0[tri[2]]; nn /= np.linalg.norm(nn)
+                vi = tri[int(np.argmax([w0, w1, w2]))]
+                P_.append(pp + push * nn); N_.append(nn); U_.append([(64.0 + cx / R * 30.0) / 512, (848.0 + cy / R * 30.0) / 1024]); J_.append(d['jnt'][vi]); W_.append(d['wgt'][vi]); A_.append(0)
+            if not ok: print('  areola decal side', sg, 'FAILED to project'); continue
+            for k in range(16):
+                F_.append([base, base + 1 + k, base + 1 + (k + 1) % 16])
+                for r in range(2):
+                    a0 = base + 1 + r * 16 + k; a1 = base + 1 + r * 16 + (k + 1) % 16; b0 = a0 + 16; b1 = a1 + 16; F_ += [[a0, b0, a1], [a1, b0, b1]]
+            # orient faces outward (normal . surface normal > 0)
+            for fi in range(len(F_) - 49, len(F_)):
+                tri = F_[fi]; pq = np.array([P_[tri[0] - len(pos0)], P_[tri[1] - len(pos0)], P_[tri[2] - len(pos0)]]); fn = np.cross(pq[1] - pq[0], pq[2] - pq[0])
+                if fn @ nz < 0: F_[fi] = [tri[0], tri[2], tri[1]]
+            print(f'  decal {sg_i}: disc R={R * 100:.1f} cm (diameter {2 * R * 100:.0f} cm) at apex {apex.round(3).tolist()}')
+        if P_:
+            d['pos'] = np.concatenate([pos0, np.array(P_)]); d['nrm'] = np.concatenate([nrm0, np.array(N_)]); d['uv'] = np.concatenate([uv0, np.array(U_)])
+            d['jnt'] = np.concatenate([d['jnt'], np.array(J_)]); d['wgt'] = np.concatenate([d['wgt'], np.array(W_, dtype=d['wgt'].dtype)]); d['idx'] = np.concatenate([idx0, np.array(F_)]); d['al'] = np.concatenate([d['al'], np.zeros(len(P_), np.uint8)])
     t = TRIM.get(n)
     import os
     if t and n == 'cirith_hands_armor' and os.environ.get('NOTRIM_HANDS') == '1': t = None

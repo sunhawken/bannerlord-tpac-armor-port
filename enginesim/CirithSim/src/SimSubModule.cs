@@ -88,29 +88,54 @@ namespace CirithSim
 
 
 
-        // ---- motion test (cloth/jiggle): CIRITH_MOTION=1 -> she walks/runs forward, stops dead, a side camera grabs a frame every 0.2 s -> shots/mot_NN.bmp
-        float mt = -1; int mshot; bool moving, stopped; Camera mcam; float nextShot; Vec3 startPos;
+        // ---- motion test (cloth/jiggle). CIRITH_MOTION=1 -> slide + stop, side camera, frames in shots/.
+        // CIRITH_VARIANTS="itemA,itemB,..." (with CIRITH_MOTION=1) runs MANY variants in ONE game session: for each item the Body slot is swapped at runtime, she slides 3 s and stops dead,
+        // frames v<idx>_<k>.bmp are written at 4 moments. One boot (~45 s) then ~9 s per variant instead of ~100 s per run.
+        float mt = -1; int mshot; Camera mcam; Vec3 startPos; string[] variants; int vIdx = -1; float vStart; int vShot; bool equipped;
         bool MotionTick(float dt)
         {
             if (Environment.GetEnvironmentVariable("CIRITH_MOTION") != "1") return false;
-            if (mt < 0) { mt = 0; mshot = 0; nextShot = 7.0f; startPos = me.Position; shotDir = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "shots"); Directory.CreateDirectory(shotDir); SimSubModule.L("motion test start"); }
+            if (mt < 0)
+            {
+                mt = 0; startPos = me.Position; shotDir = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "shots"); Directory.CreateDirectory(shotDir);
+                var vv = Environment.GetEnvironmentVariable("CIRITH_VARIANTS"); variants = string.IsNullOrEmpty(vv) ? null : vv.Split(','); SimSubModule.L("motion test start, variants=" + (variants == null ? "none" : variants.Length.ToString()));
+            }
             mt += dt; var ms = ScreenManager.TopScreen as MissionScreen; if (ms == null) return true;
-            // she is player-controlled and ignores scripted positions, so slide her with TeleportToPosition at constant velocity for 4 s (cloth reacts to world motion), then stop dead
-            if (mt > 5f && mt <= 9.2f) { try { var f0 = me.LookDirection; f0.z = 0; f0.Normalize(); var np = me.Position + f0 * (3.5f * dt); np.z = me.Position.z; me.TeleportToPosition(np); } catch (Exception e) { if (!moving) SimSubModule.L("teleport err " + e.Message); } moving = true; }
-            if (mt > 9.2f && !stopped) { stopped = true; SimSubModule.L("motion: stop"); }
+            // free camera on her left side
             try
             {
                 if (mcam == null) mcam = Camera.CreateCamera();
-                var f = me.LookDirection; f.z = 0; f.Normalize(); var side = new Vec3(-f.y, f.x, 0);     // camera to her left, looking at her
-                var target = me.Position + new Vec3(0, 0, 1.0f); var camPos = target + side * 3.2f + new Vec3(0, 0, 0.2f); var look = target - camPos; look.Normalize();
+                var f = me.LookDirection; f.z = 0; f.Normalize(); var side = new Vec3(-f.y, f.x, 0); var target = me.Position + new Vec3(0, 0, 1.0f); var camPos = target + side * 3.2f + new Vec3(0, 0, 0.2f); var look = target - camPos; look.Normalize();
                 var m = Mat3.CreateMat3WithForward(ref look); m.RotateAboutSide(1.5707964f); mcam.Frame = new MatrixFrame(m, camPos); mcam.SetFovVertical(0.9f, 16f / 9f, 0.05f, 2000f);
                 typeof(MissionScreen).GetProperty("CustomCamera").SetValue(ms, mcam);
             }
             catch (Exception e) { SimSubModule.L("motion cam err " + e.Message); }
-            if (mt >= nextShot && mshot < 45) { try { Utilities.TakeScreenshot(Path.Combine(shotDir, $"mot_{mshot:00}.bmp")); } catch { } SimSubModule.L($"mot {mshot} t={mt:0.00} pos={me.Position}"); mshot++; nextShot += 0.2f; }
-            if (mshot >= 45) { SimSubModule.L("motion done"); Utilities.ExitProcess(0); }
+            if (variants == null)   // single-run mode
+            {
+                if (mt > 5f && mt <= 9.2f) Slide(dt);
+                if (mt >= 7.0f + mshot * 0.2f && mshot < 45) { Shot($"mot_{mshot:00}"); mshot++; }
+                if (mshot >= 45) { SimSubModule.L("motion done"); Utilities.ExitProcess(0); }
+                return true;
+            }
+            if (mt < 5f) return true;                                                  // battle settles
+            if (vIdx < 0 || (mt - vStart) > 9.0f) { vIdx++; if (vIdx >= variants.Length) { SimSubModule.L("variants done"); Utilities.ExitProcess(0); return true; } vStart = mt; vShot = 0; equipped = false; try { me.TeleportToPosition(startPos); } catch { } }
+            float tv = mt - vStart;
+            if (!equipped && tv > 0.2f)
+            {
+                equipped = true;
+                try
+                {
+                    var item = TaleWorlds.ObjectSystem.MBObjectManager.Instance.GetObject<ItemObject>(variants[vIdx]); var eq = me.SpawnEquipment.Clone(false);
+                    eq[EquipmentIndex.Body] = new EquipmentElement(item); me.UpdateSpawnEquipmentAndRefreshVisuals(eq); SimSubModule.L($"variant {vIdx}: {variants[vIdx]} equipped");
+                }
+                catch (Exception e) { SimSubModule.L("equip err " + e.Message); }
+            }
+            if (tv > 2.0f && tv <= 5.0f) Slide(dt);                                    // 3 s at 3.5 m/s, then stop dead at tv=5.0
+            float[] at = { 3.5f, 5.1f, 5.6f, 6.6f }; if (vShot < at.Length && tv >= at[vShot]) { Shot($"v{vIdx:00}_{vShot}"); vShot++; }
             return true;
         }
+        void Slide(float dt) { try { var f0 = me.LookDirection; f0.z = 0; f0.Normalize(); var np = me.Position + f0 * (3.5f * dt); np.z = me.Position.z; me.TeleportToPosition(np); } catch (Exception e) { SimSubModule.L("teleport err " + e.Message); } }
+        void Shot(string name) { try { Utilities.TakeScreenshot(Path.Combine(shotDir, name + ".bmp")); } catch { } SimSubModule.L("shot " + name); }
 
         // ---- scripted free-cam: CIRITH_VIEWS=<file>  lines "name az elev dist height fov" (az rad offset from behind-her, elev rad, dist m added, height m added, fov deg or 0)
         Camera cam; static float height(float h) { return h; }

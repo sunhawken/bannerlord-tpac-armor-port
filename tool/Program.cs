@@ -466,14 +466,23 @@ class P
             var BFc = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance; var gCook = Guid.Parse("b97e0f10-df49-4666-8f1d-ada6630d4b4e"); var gMap = Guid.Parse("af41613e-bd4d-46ec-8284-debb56c042dc");
             var par = MM["vlandian_woman_dress"]; var clo = M.GetAsset(par.ClothMetamesh) as Metamesh; var pk = new AssetPackage(Guid.NewGuid());
             var mp = new Dictionary<Guid, Guid>(); foreach (var m0 in new[] { par, clo }) { mp[m0.Guid] = Guid.NewGuid(); foreach (var mx in m0.Meshes) mp[mx.Guid] = Guid.NewGuid(); }
-            Func<string, byte[], byte[]> patch = (envName, raw) => { var pv = Environment.GetEnvironmentVariable(envName); if (string.IsNullOrEmpty(pv)) return raw; var r = (byte[])raw.Clone(); foreach (var item in pv.Split(',')) { var kvp = item.Split(':'); int off = int.Parse(kvp[0]); var hb = Convert.FromHexString(kvp[1]); Array.Copy(hb, 0, r, off, hb.Length); } return r; };
+            Func<byte[], Dictionary<string, (int start, int words)>> cookLayout = raw =>
+            {
+                var u = new uint[raw.Length / 4]; Buffer.BlockCopy(raw, 0, u, 0, u.Length * 4); var L = new Dictionary<string, (int, int)>(); int E = (int)u[1], i = 6;
+                L["aabb"] = (i, 8); i += 8; L["restlen"] = (i + 1, E); i += 1 + E; L["edges"] = (i + 1, E); i += 1 + E; int T = (int)u[i]; L["sets"] = (i + 1, T * 8); i += 1 + T * 8; int nb = (int)u[i]; L["batches2"] = (i + 1, 2 * nb); i += 1 + 2 * nb;
+                foreach (var nm in new[] { "A", "B", "C", "D", "E", "F", "G", "H", "I" }) { int cnt = (int)u[i]; int words = nm == "G" ? cnt / 4 : cnt; L[nm] = (i + 1, words); i += 1 + words; if (i >= u.Length) break; }
+                return L;
+            };
+            Func<string, byte[], byte[]> patch = (envName, raw) => { var pv = Environment.GetEnvironmentVariable(envName);
+                if (envName == "CK_PATCH" && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CK_ZERO"))) { var L0 = cookLayout(raw); var r0 = (byte[])raw.Clone(); foreach (var nmz in Environment.GetEnvironmentVariable("CK_ZERO").Split(',')) { var (st, wd) = L0[nmz]; Array.Clear(r0, st * 4, wd * 4); Console.WriteLine($"  zeroed {nmz}: {wd} words"); } raw = r0; if (string.IsNullOrEmpty(pv)) return raw; }
+                if (string.IsNullOrEmpty(pv)) return raw; if (string.IsNullOrEmpty(pv)) return raw; var r = (byte[])raw.Clone(); foreach (var item in pv.Split(',')) { var kvp = item.Split(':'); int off = int.Parse(kvp[0]); var hb = Convert.FromHexString(kvp[1]); Array.Copy(hb, 0, r, off, hb.Length); } return r; };
             foreach (var m0 in new[] { par, clo })
             {
                 var oldGuid = m0.Guid; var segs = m0.TypelessDataSegments.ToList();
                 foreach (var sg in segs) if (mp.ContainsKey(sg.OwnerGuid)) sg.OwnerGuid = mp[sg.OwnerGuid];
                 for (int i = 0; i < m0.TypelessDataSegments.Count; i++)
                 {
-                    var sg = m0.TypelessDataSegments[i]; var envn = sg.TypeGuid == gCook ? "CK_PATCH" : sg.TypeGuid == gMap ? "MP_PATCH" : null; if (envn == null || string.IsNullOrEmpty(Environment.GetEnvironmentVariable(envn))) continue;
+                    var sg = m0.TypelessDataSegments[i]; var envn = sg.TypeGuid == gCook ? "CK_PATCH" : sg.TypeGuid == gMap ? "MP_PATCH" : null; if (envn == null || (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(envn)) && !(envn == "CK_PATCH" && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CK_ZERO"))))) continue;
                     var fileC = (FileInfo)typeof(AbstractExternalLoader).GetField("_file", BFc).GetValue(sg); byte[] raw;
                     using (var brC = new BinaryReader(fileC.OpenRead())) raw = (byte[])sg.GetType().GetMethod("GetRawData", BFc).Invoke(sg, new object[] { brC });
                     raw = patch(envn, raw); var ed = new ExternalData(sg.TypeGuid); ed.ReadData(new BinaryReader(new MemoryStream(raw)), new Dictionary<object, object>(), raw.Length);
