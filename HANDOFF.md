@@ -59,3 +59,6 @@ Areola was painted at atlas (218,76) = vertices at y=-0.075 = her BACK (front is
 
 ## UPDATE 2026-11-26 (seamless arms/chest)
 Cause: only the torso skin block of the atlas got the gamma lift (lum ~89); the arm/shoulder skin islands stayed at ~62 -> tone step at the shoulder, plus black island borders bleeding in at UV seams. Fix in transplant/gem_mask.py: same gamma lift on arm skin texels (arm triangles outside the torso block), 4 px skin gutter padding, and enginesim/seam_fix.py (repaints dark-grey texels at UV-seam edges whose other side is skin). enginesim/seam_scan.py measures seam colour differences (arm-region mean diff 24 -> 9.7). Minor leftover: faint darker patch on top of the shoulders.
+
+## UPDATE 2026-11-26 (precise cut-outs, back restored, viewer skin)
+- transplant/gem_mask.py: skin is now the ORIGINAL (viewer) skin - the gamma lift is off unless env LIFT=1 (areola kept). Precise "outside black" flood cut (seeded from the triangle-mask border, never crossing the gold outline) for the pendant diamond and the hoop earrings (_outside_black). The bead strips / 4-gem cluster (atlas x<95, y>=170: hip-band fringe and ponytail rings) are NOT cut any more: transparency + DXT5 blocks + mips made those thin beads/gold vanish on her back. Region at atlas left edge (chest teal gem) still cut. Gutter padding and seam_fix kept.

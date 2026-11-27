@@ -39,14 +39,40 @@ front = gem.copy(); reach = np.zeros_like(gem)
 for _ in range(D):
     front = ndi.binary_dilation(front, structure=np.ones((3, 3))) & (dark | gem); reach |= front
 clear = reach & dark
+clear[170:, :95] = False       # bead strips / 4-gem cluster (fringe + ponytail rings): thin details, transparency made them vanish (alpha blocks + mips) -> keep opaque like the viewer
+clear[0:100, 150:215] = False  # pendant: redone precisely below
+import os
+sys.path.insert(0, '../enginesim'); from skin_islands import raster as _raster
+def _outside_black(rect, tri_sets, name):
+    """precise cut: black texels connected to the border of the island's triangle mask through near-black (never across the gold outline) -> transparent"""
+    x0, y0, x1, y1 = rect; m = np.zeros((H, W), bool)
+    for uvs_, f_ in tri_sets:
+        c_ = uvs_[f_].mean(1); sel_ = f_[(c_[:, 0] * (W - 1) > x0) & (c_[:, 0] * (W - 1) < x1) & (c_[:, 1] * (H - 1) > y0) & (c_[:, 1] * (H - 1) < y1)]
+        if len(sel_): m |= _raster(sel_, uvs_, H, W)
+    m = ndi.binary_dilation(m, iterations=1)
+    lum_ = im[..., :3].astype(int).sum(2) / 3.0; sat_ = im[..., :3].max(2).astype(int) - im[..., :3].min(2).astype(int)
+    dk = m & (lum_ < 48) & (sat_ < 40)
+    seeds = dk & ~ndi.binary_erosion(m, iterations=3)
+    fl = ndi.binary_propagation(seeds, mask=dk)
+    print(name, 'mask px', int(m.sum()), 'outside-black made transparent', int(fl.sum())); return fl
+hp = {n_: dd_ for n_, _, dd_ in g.primitives()}['cirith_head_armor']
+sets = [(uv.astype(float), f), (hp['uv'].astype(float), hp['idx'])]
+cut_pend = _outside_black((150, 10, 215, 90), sets, 'pendant')
+cut_ear = _outside_black((296, 98, 362, 162), sets, 'hoop earrings')
+clear = clear | cut_pend | cut_ear
 im[clear, 3] = 0
+# colour of the transparent texels = nearest opaque texel (no dark halo when filtered)
+_d, (_iy, _ix) = ndi.distance_transform_edt(clear, return_indices=True)
+_cp = (cut_pend | cut_ear)
+for k in range(3): im[..., k][_cp] = im[..., k][_iy[_cp], _ix[_cp]]
 # lift the chest/torso SKIN so the breast shading is actually visible under the bead net (it sat at lum ~40-65, nearly black in the engine's lighting):
 # low-saturation grey pixels in the torso skin block of the atlas get a gamma lift; gold, gems and beads (saturated/bright) are untouched.
 sk = np.zeros((H, W), bool); sk[0:256, 100:250] = True
 mx = np.maximum.reduce([R, G, B]); mn = np.minimum.reduce([R, G, B]); lum = (R + G + B) / 3.0
 skin = sk & ((mx - mn) < 22) & (lum < 150) & (lum > 18) & (im[..., 3] > 0)
 lifted = 255.0 * (lum[skin] / 255.0) ** 0.72; gain = lifted / lum[skin]
-for k in range(3): im[..., k][skin] = np.clip(im[..., k][skin] * gain, 0, 255).astype(np.uint8)
+if os.environ.get('LIFT') == '1':
+    for k in range(3): im[..., k][skin] = np.clip(im[..., k][skin] * gain, 0, 255).astype(np.uint8)
 print('skin px lifted', int(skin.sum()))
 
 # ---- seamless arms: the arm/shoulder skin islands were NOT lifted (lum ~62 vs torso ~89 -> visible tone step at the shoulder). Same gamma on the skin pixels of every body triangle outside the torso block,
@@ -57,11 +83,12 @@ arm_tris = f[(cx_ > 0.17) & (cz_ > 1.2)]
 arm_m = raster(arm_tris, uv, H, W)
 skin2 = arm_m & ~sk & ((mx - mn) < 22) & (lum < 150) & (lum > 18) & (im[..., 3] > 0)
 lift2 = 255.0 * (lum[skin2] / 255.0) ** 0.72; gain2 = lift2 / lum[skin2]
-for k in range(3): im[..., k][skin2] = np.clip(im[..., k][skin2] * gain2, 0, 255).astype(np.uint8)
+if os.environ.get('LIFT') == '1':
+    for k in range(3): im[..., k][skin2] = np.clip(im[..., k][skin2] * gain2, 0, 255).astype(np.uint8)
 print('arm skin px lifted', int(skin2.sum()))
 allm = raster(f, uv, H, W)
 lum2 = im[..., :3].astype(int).sum(2) / 3.0; sat2 = im[..., :3].max(2).astype(int) - im[..., :3].min(2).astype(int)
-sk_all = (skin | skin2) & (sat2 < 22) & (lum2 > 40)
+sk_all = (skin | skin2) & (sat2 < 22) & (lum2 > 22)
 dist, (iy, ix) = ndi.distance_transform_edt(~sk_all, return_indices=True)
 gut = (~allm) & (dist <= 4) & (lum2 < 14) & (im[..., 3] > 0)
 for k in range(3): im[..., k][gut] = im[..., k][iy[gut], ix[gut]]
