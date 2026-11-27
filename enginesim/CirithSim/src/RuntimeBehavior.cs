@@ -42,6 +42,24 @@ namespace CirithSim
         bool SafeG() { try { bool d = TaleWorlds.InputSystem.Input.IsKeyDown(TaleWorlds.InputSystem.InputKey.G); bool r = d && !gWas; gWas = d; return r; } catch { return false; } }
         public override void OnAgentRemoved(Agent affectedAgent, Agent affectorAgent, AgentState agentState, KillingBlow blow) { try { if (affectedAgent == Agent.Main) CirithVoice.Trigger(agentState == AgentState.Killed || agentState == AgentState.Unconscious ? "Death" : "Pain", "removed " + agentState); } catch { } }
         public override void OnAgentHit(Agent affectedAgent, Agent affectorAgent, in MissionWeapon affectorWeapon, in Blow blow, in AttackCollisionData attackCollisionData) { try { if (affectedAgent == Agent.Main) CirithVoice.Trigger("Pain", "hit"); } catch { } }
+        // silence the engine's own voice for the player: the agent visuals carry a voice-definition index (voice_definitions.xml); -1 = no definition -> nothing to play
+        object silencedVisuals; float silenceCheck;
+        void SilenceVanilla(Agent m)
+        {
+            try
+            {
+                if (Environment.GetEnvironmentVariable("CIRITH_KEEPVANILLA") == "1") return;
+                var v = m.AgentVisuals; if (v == null) return;
+                if (!ReferenceEquals(silencedVisuals, v))
+                {
+                    string before = ""; try { before = m.GetAgentVoiceDefinition(); } catch { }
+                    v.SetVoiceDefinitionIndex(-1, 1f); silencedVisuals = v;
+                    string after = ""; try { after = m.GetAgentVoiceDefinition(); } catch { }
+                    SimSubModule.L("voice: vanilla voice silenced for the player (definition '" + before + "' -> '" + after + "')");
+                }
+            }
+            catch (Exception e) { SimSubModule.L("voice silence err " + e.Message); }
+        }
         string lastAct = "";
         void VoiceFromActions(Agent m)
         {
@@ -87,7 +105,7 @@ namespace CirithSim
                 {   // test: ask the engine for each voice type; the Harmony prefix must swap them for the WAVs
                     int vi = (int)((life - 4f) / 1.2f); if (life > 4f && vi != lastVoice && vi < 12) { lastVoice = vi; var vt = new[] { SkinVoiceManager.VoiceType.Grunt, SkinVoiceManager.VoiceType.Jump, SkinVoiceManager.VoiceType.Yell, SkinVoiceManager.VoiceType.Pain, SkinVoiceManager.VoiceType.Death, SkinVoiceManager.VoiceType.Stun, SkinVoiceManager.VoiceType.Fear, SkinVoiceManager.VoiceType.Climb, SkinVoiceManager.VoiceType.Focus, SkinVoiceManager.VoiceType.Debacle, SkinVoiceManager.VoiceType.Victory, SkinVoiceManager.VoiceType.Drown }; try { m.MakeVoice(vt[vi], SkinVoiceManager.CombatVoiceNetworkPredictionType.NoPrediction); } catch (Exception ve) { SimSubModule.L("voice test err " + ve.Message); } }
                 }
-                if (m != null && m.IsActive()) VoiceFromActions(m);
+                if (m != null && m.IsActive()) { VoiceFromActions(m); SilenceVanilla(m); }
                 foreach (var a in Mission.Current.Agents)
                 {
                     if (a != null && a.IsActive() && a.AgentVisuals != null && WeaponAnim.IsWielding(a) || (a != null && wanim.ContainsKey(a))) { if (!wanim.TryGetValue(a, out var wa)) { wa = new WeaponAnim(); wanim[a] = wa; SimSubModule.L("runtime: weapon controller attached to " + (a.Name ?? "agent")); } wa.Update(a, dt); }

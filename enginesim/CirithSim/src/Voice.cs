@@ -84,9 +84,9 @@ namespace CirithSim
             try
             {
                 for (int i = live.Count - 1; i >= 0; i--) { try { if (live[i].IsStopped()) { live[i].Release(); live.RemoveAt(i); } } catch { live.RemoveAt(i); } }
-                var ev = SoundEvent.CreateEventFromExternalFile("cirith_" + type, file, Mission.Current.Scene, true, false);
+                var ev = SoundEvent.CreateEventFromExternalFile("event:/Extra/voiceover", file, Mission.Current.Scene, false, false);      // the first argument must be an FMOD "programmer sound" event that exists in the banks: the game itself uses event:/Extra/voiceover for voiced dialogue; 2D so the camera mod / distance cannot attenuate the player's own voice
                 if (ev == null) { SimSubModule.L("voice: event null for " + Path.GetFileName(file)); return; }
-                var pos = a.GetEyeGlobalPosition(); ev.SetPosition(pos); bool ok = ev.Play(); live.Add(ev); Played++;
+                bool ok = ev.Play(); live.Add(ev); Played++;
                 SimSubModule.L("voice: " + type + " -> " + Path.GetFileName(file) + " played=" + ok);
             }
             catch (Exception e) { SimSubModule.L("voice play err " + e.Message); }
