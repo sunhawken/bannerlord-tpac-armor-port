@@ -48,7 +48,7 @@ $env:CIRITH_CHAR = $Char; $env:CIRITH_SCENE = $Scene
 $mods = if ($ExtraModules) { 'Native*SandBoxCore*Sandbox*StoryMode*CustomBattle*' + $ExtraModules + '*CirithSim' } else { 'Native*SandBoxCore*CustomBattle*CirithSim' }
 $args = "/singleplayer _MODULES_*$mods*_MODULES_"
 if ($Visible) {
-  $env:CIRITH_CHAR = $Char; $env:CIRITH_SCENE = $Scene; $env:CIRITH_NOCAM = '1'
+  $env:CIRITH_CHAR = $Char; $env:CIRITH_SCENE = $Scene; $env:CIRITH_NOCAM = '1'; $env:CIRITH_RUNTIME = '1'; $env:CIRITH_LIVE = '1'
   $p = Start-Process -FilePath (Join-Path $bin 'Bannerlord.exe') -ArgumentList $args -WorkingDirectory $bin -PassThru
   Write-Host "launched VISIBLE Bannerlord pid $($p.Id) - it will boot straight into the battle with $Char (free camera); close the game window when done"
   return

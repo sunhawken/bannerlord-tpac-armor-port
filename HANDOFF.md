@@ -114,3 +114,5 @@ User asked for the full "black means transparent" recipe on all her parts (rever
 **REVERTED (user request, same day):** the black-is-transparent cut-outs above were undone. cirith_armor.tpac is back to the opaque atlas (original skin + areola); blackkey.py stays in the repo but is OFF (only used with BLACKKEY=1 in mk_atlas.py).
 
 **UPDATE (user request):** atlas sources are now the textures the gallery viewer shows (C_DS_NZ bare glb images, saved as enginesim/tex/atlas1.png / atlas2.png with their own alpha, no extra keying); the previous ones are tex/atlas*_orig_before_viewer.png. Areola kept but smaller (radii 7.5x6 px, was 12x9.5). Build: transplant/gem_mask.py -> EDITED_TEXTURE=1 mk_atlas.py -> armorpack. Preview docs/previews/viewer_texture_ingame.png.
+
+**Live play (-Visible):** the earlier visible run used the test harness behaviour (no weapon controller, no weapon draw). -Visible now sets CIRITH_RUNTIME=1 + CIRITH_LIVE=1 so the real runtime behaviour runs; the sword is drawn automatically 2 s after spawn and key G draws/sheathes it (number keys are the order menu in a battle). Verified headless: controller attached, clips loaded, sword drawn.
