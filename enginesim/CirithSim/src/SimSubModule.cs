@@ -31,7 +31,7 @@ namespace CirithSim
             LogPath = Path.GetFullPath(Path.Combine(dir, "..", "..", "cirithsim.log"));
             File.WriteAllText(LogPath, "");
             Target = Environment.GetEnvironmentVariable("CIRITH_CHAR") ?? "cirith_test";
-            L("SubModule loaded, target character = " + Target); CirithVoice.Install();
+            L("SubModule loaded, target character = " + Target); CirithVoice.Install(); CirithHitbox.Install();
         }
 
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)

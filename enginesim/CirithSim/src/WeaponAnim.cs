@@ -64,7 +64,7 @@ namespace CirithSim
                 bool mir = Environment.GetEnvironmentVariable("CIRITH_LEFT") != "1"; Mirrored = mir; string sfx = mir ? "_m" : ""; idle = Clip.Load("idle" + sfx); walk = Clip.Load("walk" + sfx); run = Clip.Load("run" + sfx); charge = Clip.Load("charge" + sfx); loaded = true;
                 SimSubModule.L($"weapon anim: clips loaded (idle {idle.N}, walk {walk.N}, run {run.N}, sprint {charge.N} frames @60 fps); natural speeds walk {walk.NatSpeed:0.00} run {run.NatSpeed:0.00} sprint {charge.NatSpeed:0.00} m/s");
                 try { var g = File.ReadAllText(Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip.txt")).Split(new[] { ' ', (char)10, (char)13 }, StringSplitOptions.RemoveEmptyEntries).Select(P).ToArray();
-                      grip = new MatrixFrame(new Mat3(new Vec3(g[0], g[3], g[6]), new Vec3(g[1], g[4], g[7]), new Vec3(g[2], g[5], g[8])), Vec3.Zero); gripLoaded = true; try { var fr = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip_r.txt"); if (File.Exists(fr)) { var q = File.ReadAllText(fr).Split(new[] { ' ', (char)10, (char)13 }, StringSplitOptions.RemoveEmptyEntries).Select(P).ToArray(); gripR = new MatrixFrame(new Mat3(new Vec3(q[0], q[3], q[6]), new Vec3(q[1], q[4], q[7]), new Vec3(q[2], q[5], q[8])), Vec3.Zero); } } catch { } LoadEdits(); SimSubModule.L($"weapon grip frame loaded: blade in l_hand frame = {g[2]:0.000},{g[5]:0.000},{g[8]:0.000}"); } catch (Exception ge) { SimSubModule.L("grip load failed: " + ge.Message); }
+                      grip = new MatrixFrame(new Mat3(new Vec3(g[0], g[3], g[6]), new Vec3(g[1], g[4], g[7]), new Vec3(g[2], g[5], g[8])), Vec3.Zero); gripLoaded = true; LoadHull(); try { var fr = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip_r.txt"); if (File.Exists(fr)) { var q = File.ReadAllText(fr).Split(new[] { ' ', (char)10, (char)13 }, StringSplitOptions.RemoveEmptyEntries).Select(P).ToArray(); gripR = new MatrixFrame(new Mat3(new Vec3(q[0], q[3], q[6]), new Vec3(q[1], q[4], q[7]), new Vec3(q[2], q[5], q[8])), Vec3.Zero); } } catch { } LoadEdits(); SimSubModule.L($"weapon grip frame loaded: blade in l_hand frame = {g[2]:0.000},{g[5]:0.000},{g[8]:0.000}"); } catch (Exception ge) { SimSubModule.L("grip load failed: " + ge.Message); }
                 var k = Environment.GetEnvironmentVariable("CIRITH_SPRINTKEY"); if (!string.IsNullOrEmpty(k) && Enum.TryParse(k, true, out InputKey kk)) SprintKey = kk;
             }
             catch (Exception e) { SimSubModule.L("weapon anim load failed: " + e.Message); }
@@ -90,6 +90,30 @@ namespace CirithSim
         }
 
         public static bool Mirrored = true; readonly Dictionary<string, MatrixFrame> editsR = new Dictionary<string, MatrixFrame>();
+        // ---- real-geometry hitbox: sample points of her actual sword mesh (ModuleData/cirith_sword_hull.txt), swept between the last two ticks
+        public static WeaponAnim MainInst; Vec3[] hull; MatrixFrame curW, prevW; bool haveW;
+        void LoadHull()
+        {
+            try
+            {
+                var f = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_sword_hull.txt"); if (!File.Exists(f)) return;
+                var l = File.ReadAllLines(f).Select(x => x.Split(' ')).Where(q => q.Length == 3).Select(q => new Vec3(P(q[0]), P(q[1]), P(q[2]))).ToList();
+                float tip = l.Max(v => v.z); for (float z = tip + 0.04f; z <= tip + 0.13f; z += 0.04f) l.Add(new Vec3(0, 0, z));      // a little LONGER than the real blade
+                hull = l.ToArray(); SimSubModule.L("hitbox hull loaded: " + hull.Length + " points (blade tip z=" + tip.ToString("0.00") + " + extension)");
+            }
+            catch (Exception e) { SimSubModule.L("hull load failed: " + e.Message); }
+        }
+        // distance (m) from a world point to the real sword geometry, including the sweep since the previous tick
+        public float MinDistance(Vec3 p)
+        {
+            if (hull == null || !haveW) return float.MaxValue; float best = float.MaxValue;
+            foreach (var h in hull)
+            {
+                var a = curW.origin + curW.rotation.s * h.x + curW.rotation.f * h.y + curW.rotation.u * h.z; var b = prevW.origin + prevW.rotation.s * h.x + prevW.rotation.f * h.y + prevW.rotation.u * h.z;
+                var ab = a - b; float L2 = ab.LengthSquared; float t = L2 > 1e-8f ? Math.Max(0f, Math.Min(1f, Vec3.DotProduct(p - b, ab) / L2)) : 0f; var q = b + ab * t; float d = (p - q).Length; if (d < best) best = d;
+            }
+            return best;
+        }
         bool engineHold;
         // jump / fall: the engine's own animation must win while she is in the air (action type on either channel, or a vertical speed the ground never produces)
         static bool JumpLike(Agent a, float vz)
@@ -288,6 +312,7 @@ namespace CirithSim
                     var hr = me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame(26); world = gf.TransformToParent(hr.TransformToParent(AtkGrip(me)));
                 }
                 swordEnt.SetGlobalFrame(ref world, false);
+                prevW = haveW ? curW : world; curW = world; haveW = true; if (me == Agent.Main) MainInst = this;
                 if (Environment.GetEnvironmentVariable("CIRITH_GRIPLOG") == "1" && dbgN++ % 40 == 0 && clip != null)
                 {
                     var back = swordEnt.GetGlobalFrame(); var inv = gf.TransformToLocal(back); var gl = EditedGrip();
