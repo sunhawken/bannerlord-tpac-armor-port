@@ -424,6 +424,27 @@ class P
             }
             return;
         }
+        if (a[1] == "clolist")
+        {
+            var BFl = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance; var g1 = Guid.Parse("b97e0f10-df49-4666-8f1d-ada6630d4b4e"); var g2 = Guid.Parse("af41613e-bd4d-46ec-8284-debb56c042dc");
+            foreach (var kv in MM.Where(k => k.Value.Meshes.Any(m => m.Flags.Contains("uses_cloth_simulation"))).OrderBy(k => k.Value.Meshes.First(m => m.Lod == 0).VertexCount).Take(40))
+            {
+                var mm = kv.Value; var me = mm.Meshes.First(m => m.Lod == 0); long s1 = 0, s2 = 0;
+                foreach (var sg in mm.TypelessDataSegments) { var asz = (ulong)typeof(AbstractExternalLoader).GetField("_actualSize", BFl).GetValue(sg); if (sg.TypeGuid == g1) s1 += (long)asz; if (sg.TypeGuid == g2) s2 += (long)asz; }
+                Console.WriteLine($"{kv.Key,-45} v={me.VertexCount,5} f={me.FaceCount,5} cloMesh={(mm.ClothMetamesh != Guid.Empty ? "yes" : "no ")} cookBlob={s1,7} mapBlob={s2,7} lods={mm.Meshes.Count}");
+            }
+            return;
+        }
+        if (a[1] == "meshprint")
+        {
+            var me0 = MM[a[2]].Meshes.First(x => x.Lod == 0); var vs0 = me0.VertexStream.Data; var ed0 = me0.EditData?.Data;
+            Console.WriteLine($"verts={vs0.Positions.Length} idx={vs0.Indices.Length} editPos={ed0?.Positions.Length} editVerts={ed0?.Vertices.Length} faces={ed0?.Faces.Length}");
+            for (int i = 0; i < vs0.Positions.Length; i++) Console.WriteLine($" v{i}: pos={vs0.Positions[i]} A={vs0.Colors1[i].A} uv={vs0.Uv1[i]} bi={vs0.BoneIndices[i]} bw={vs0.BoneWeights[i]}");
+            Console.WriteLine(" idx: " + string.Join(",", vs0.Indices));
+            if (ed0 != null) { Console.WriteLine(" editPositions: " + string.Join(" ", ed0.Positions.Select(q => q.ToString()))); Console.WriteLine(" editVertex posIdx: " + string.Join(",", ed0.Vertices.Select(q => q.PositionIndex))); Console.WriteLine(" editFaces: " + string.Join(" ", ed0.Faces.Select(q => $"{q.V0},{q.V1},{q.V2}"))); }
+            var cm = me0.ClothingMaterial; Console.WriteLine($" clothingMaterial name='{cm.Name}' b={cm.BendingStiffness} sh={cm.ShearingStiffness} st={cm.StretchingStiffness} an={cm.AnchorStiffness} damp={cm.Damping} g={cm.Gravity} inertia={cm.LinearInertia} wind={cm.Wind} drag={cm.AirDragMultiplier}");
+            return;
+        }
         if (a[1] == "packinfo")
         {
             var pk2 = new AssetPackage(a[2], true, true);

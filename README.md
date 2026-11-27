@@ -118,8 +118,13 @@ Never change several things at once. Start from a **positive control** (vanilla 
 Isolate a part with its own test character that wears only that item, and render a numpy/GL preview of the source mesh with its texture to compare against the engine.
 Also compare packages field-by-field (`tool pkgdiff a.tpac b.tpac`) and diff serialized bytes (`tool rawstream`).
 
+### Cut-out regions (precision alpha)
+With the alpha-tested material you can make parts of an atlas transparent. `transplant/gem_mask.py` finds the UV islands of the triangles in a height band, finds the gem
+pixels, and clears only the near-black pixels connected to a gem through black within N px, so gold trim and the gems stay. `MetaMesh.GetCopy(name,false,true).HasClothData()`
+(in the sim mod) is a cheap way to ask the engine what it thinks of a mesh.
+
 ## 5. Not solved: in-game cloth / jiggle
-Setting the mesh flag `uses_cloth_simulation`, the per-mesh `ClothingMaterial` parameters and vertex-alpha free weights is **not enough**. Vanilla cloth armor also has
+The engine does recognise the mesh flag + per-mesh `ClothingMaterial` + vertex-alpha weights (`HasClothData() == True` for the packed body/head meshes), but whether it *simulates* without the cooked data is unconfirmed, and vanilla cloth armor also has more: Vanilla cloth armor also has
 (a) a separate simplified `clo_<name>` metamesh whose mesh carries an extra compiled data segment (type `b97e0f10-...`, ~80 KB for a dress) and
 (b) a `ClothMappingData` segment (`af41613e-...`, ~22 bytes per render vertex) on the render mesh plus a dependency link. Both are compiled binary formats that this
 project has not decoded yet. PRs / findings welcome.

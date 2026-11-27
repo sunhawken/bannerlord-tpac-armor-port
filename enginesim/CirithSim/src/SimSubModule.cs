@@ -97,6 +97,9 @@ namespace CirithSim
             if (views == null)
             {
                 views = File.ReadAllLines(vf).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("#")).Select(l => l.Split(new[] { ' ', '	' }, StringSplitOptions.RemoveEmptyEntries)).ToList();
+                foreach (var mi in typeof(Agent).GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+                    if (mi.Name.StartsWith("Set") && (mi.Name.Contains("Movement") || mi.Name.Contains("Look") || mi.Name.Contains("Target") || mi.Name.Contains("Scripted") || mi.Name.Contains("Position") || mi.Name.Contains("Control")) || mi.Name.Contains("Teleport") || mi.Name.Contains("Force"))
+                        SimSubModule.L("AGENT API " + mi.Name + "(" + string.Join(", ", mi.GetParameters().Select(x => x.ParameterType.Name + " " + x.Name)) + ")");
                 foreach (var fi in typeof(MissionScreen).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)) if (fi.Name.IndexOf("ist", StringComparison.OrdinalIgnoreCase) >= 0 || fi.Name.IndexOf("oom", StringComparison.OrdinalIgnoreCase) >= 0 || fi.Name.IndexOf("eight", StringComparison.OrdinalIgnoreCase) >= 0 || fi.Name.IndexOf("levation", StringComparison.OrdinalIgnoreCase) >= 0) SimSubModule.L("MS field " + fi.FieldType.Name + " " + fi.Name);
                 shotDir = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "shots"); Directory.CreateDirectory(shotDir); t = 0; vt = -1; vi = -1;
                 SimSubModule.L("view queue: " + views.Count + " views");
@@ -150,6 +153,15 @@ namespace CirithSim
                     shot = true;
                     { var msr = ScreenManager.TopScreen; foreach (var mi in msr.GetType().GetMembers(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.FlattenHierarchy)) if (mi.Name.IndexOf("amera", StringComparison.OrdinalIgnoreCase) >= 0 || mi.Name.IndexOf("Photo", StringComparison.OrdinalIgnoreCase) >= 0) SimSubModule.L("MS member: " + mi.MemberType + " " + mi.Name); }
                     foreach (var ag in Mission.Current.Agents) SimSubModule.L($"AGENT {ag.Character?.StringId} main={ag == Agent.Main} team={ag.Team?.TeamIndex} pos={ag.Position} visible={ag.AgentVisuals != null} equip=" + string.Join(",", Enumerable.Range(0, 12).Select(i => ag.SpawnEquipment[(EquipmentIndex)i].Item?.StringId ?? "-")));
+                    try
+                    {
+                        foreach (var nmx in new[] { "cirith_body_armor", "cirith_head_armor", "cirith_hands_armor", "cirith_legs_armor", "vlandian_woman_dress", "clo_vlandian_woman_dress", "empire_helmet_g_d", "armor_roman_mail_shirt" })
+                        {
+                            var mmx = MetaMesh.GetCopy(nmx, false, true);
+                            if (mmx == null) { SimSubModule.L("METAMESH " + nmx + ": not found"); continue; }
+                            SimSubModule.L($"METAMESH {nmx}: meshes={mmx.MeshCount} HasClothData={mmx.HasClothData()}");
+                        }
+                    } catch (Exception cx) { SimSubModule.L("cloth probe failed: " + cx.Message); }
                     try
                     {
                         var ent = me.AgentVisuals.GetEntity(); SimSubModule.L("entity " + ent.Name + " frame " + ent.GetGlobalFrame().origin + " visible=" + ent.IsVisibleIncludeParents());
