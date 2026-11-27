@@ -68,3 +68,6 @@ gem_mask.py _outside_black_tris(): flood the TRUE black (lum<24, sat<30 - the da
 
 ## UPDATE (breast gems)
 Same protected outside-black cut applied to the breast bead net / gems (body tris z 1.2-1.52, |x|<0.19) in gem_mask.py.
+
+## UPDATE (breast bead net fix)
+Breast bead net: enclosed black between beads is now cut too (everywhere=True, only black within 4 px of bead/gold/gem texels, halo 0); true-black threshold is lum<14 for ALL cuts (dark skin shading is lum 15-60 and made holes at thr 24-48). Areola is painted after the cut so it stays opaque.

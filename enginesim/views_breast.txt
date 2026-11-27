@@ -1,3 +1,6 @@
 breast_front 0 0.0 0.9 1.3 0
 breast_34 0.6 0.05 0.9 1.3 0
 breast_side 1.4 0.05 0.9 1.3 0
+collar 0 0.1 0.7 1.45 0
+hip_front 0 0.05 1.0 0.95 0
+face 0.5 0.05 1.0 1.6 0

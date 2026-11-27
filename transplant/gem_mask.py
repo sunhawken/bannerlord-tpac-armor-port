@@ -38,7 +38,7 @@ dist = ndi.distance_transform_edt(~gem)
 front = gem.copy(); reach = np.zeros_like(gem)
 for _ in range(D):
     front = ndi.binary_dilation(front, structure=np.ones((3, 3))) & (dark | gem); reach |= front
-clear = reach & dark
+clear = reach & dark & ((R + G + B) / 3.0 < 14)
 clear[170:, :95] = False       # bead strips / 4-gem cluster (fringe + ponytail rings): thin details, transparency made them vanish (alpha blocks + mips) -> keep opaque like the viewer
 clear[0:100, 150:215] = False  # pendant: redone precisely below
 import os
@@ -51,7 +51,7 @@ def _outside_black(rect, tri_sets, name):
         if len(sel_): m |= _raster(sel_, uvs_, H, W)
     m = ndi.binary_dilation(m, iterations=1)
     lum_ = im[..., :3].astype(int).sum(2) / 3.0; sat_ = im[..., :3].max(2).astype(int) - im[..., :3].min(2).astype(int)
-    dk = m & (lum_ < 48) & (sat_ < 40)
+    dk = m & (lum_ < 14) & (sat_ < 30)      # true black only (dark-grey skin in the same rect must stay)
     seeds = dk & ~ndi.binary_erosion(m, iterations=3)
     fl = ndi.binary_propagation(seeds, mask=dk)
     print(name, 'mask px', int(m.sum()), 'outside-black made transparent', int(fl.sum())); return fl
@@ -59,7 +59,7 @@ hp = {n_: dd_ for n_, _, dd_ in g.primitives()}['cirith_head_armor']
 sets = [(uv.astype(float), f), (hp['uv'].astype(float), hp['idx'])]
 cut_pend = _outside_black((150, 10, 215, 90), sets, 'pendant')
 cut_ear = _outside_black((296, 98, 362, 162), sets, 'hoop earrings')
-def _outside_black_tris(tri_sets, name, halo=2, edge=3):
+def _outside_black_tris(tri_sets, name, halo=2, edge=3, thr=24, everywhere=False):
     """same flood cut, but for explicit triangle sets (hips / collar). The transparent set keeps a `halo`-px opaque black rim around every non-black texel (gold, teal gems, beads),
     so thin details are never eroded by DXT5 alpha blocks / mip filtering."""
     m = np.zeros((H, W), bool)
@@ -67,11 +67,11 @@ def _outside_black_tris(tri_sets, name, halo=2, edge=3):
         if len(f_): m |= _raster(f_, uvs_, H, W)
     m = ndi.binary_dilation(m, iterations=1)
     lum_ = im[..., :3].astype(int).sum(2) / 3.0; sat_ = im[..., :3].max(2).astype(int) - im[..., :3].min(2).astype(int)
-    dk = m & (lum_ < 24) & (sat_ < 30)      # true black only: the dark-grey SKIN of the same islands (lum ~40+) must stay
+    dk = m & (lum_ < thr) & (sat_ < 30)      # true black only: the dark-grey SKIN of the same islands (lum ~40+) must stay
     seeds = dk & ~ndi.binary_erosion(m, iterations=edge)
-    fl = ndi.binary_propagation(seeds, mask=dk)
-    keep = ndi.binary_dilation(m & ~dk, iterations=halo)      # opaque rim around gold/gems/beads
-    fl &= ~keep
+    if everywhere: dk &= ndi.binary_dilation(m & (((lum_ > 80) | (sat_ > 45))), iterations=4)      # only black NEAR beads/gems/gold - never dark skin shading
+    fl = dk.copy() if everywhere else ndi.binary_propagation(seeds, mask=dk)      # everywhere: also the black ENCLOSED between beads (bead net)
+    if halo > 0: fl &= ~ndi.binary_dilation(m & ~dk, iterations=halo)      # opaque rim around gold/gems/beads
     print(name, 'mask px', int(m.sum()), 'transparent', int(fl.sum())); return fl
 _cz = p[f][:, :, 2].mean(1)
 hip_sel = f[(_cz > 0.78) & (_cz < 1.20)]
@@ -80,9 +80,12 @@ col_sel = hp['idx'][(_hz > 1.40) & (_hz < 1.56) & (_hx < 0.30)]
 cut_hip = _outside_black_tris([(uv.astype(float), hip_sel)], 'hips')
 cut_col = _outside_black_tris([(hp['uv'].astype(float), col_sel)], 'collar')
 br_sel = f[(_cz >= 1.20) & (_cz < 1.52) & (np.abs(p[f][:, :, 0]).mean(1) < 0.19)]
-cut_br = _outside_black_tris([(uv.astype(float), br_sel)], 'breast gems/bead net')
+cut_br = _outside_black_tris([(uv.astype(float), br_sel)], 'breast gems/bead net', halo=0, thr=14, everywhere=True)
 cut_pend = cut_pend | cut_hip | cut_col | cut_br
 clear = clear | cut_pend | cut_ear
+if os.environ.get('DBG'):
+    _o=np.asarray(Image.open('../enginesim/tex/atlas1.png').convert('RGB')).astype(int).sum(2)/3
+    for _n,_m in (('old reach',reach&dark),('pend',cut_pend&~(cut_hip|cut_col|cut_br)),('ear',cut_ear),('hip',cut_hip),('col',cut_col),('br',cut_br)): print('DBG',_n,int(_m.sum()),'orig lum>=24:',int((_m&(_o>=24)).sum()),'>=40:',int((_m&(_o>=40)).sum()))
 im[clear, 3] = 0
 # colour of the transparent texels = nearest opaque texel (no dark halo when filtered)
 _d, (_iy, _ix) = ndi.distance_transform_edt(clear, return_indices=True)
