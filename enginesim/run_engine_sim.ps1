@@ -6,7 +6,7 @@
   usage:  .\run_engine_sim.ps1 [-Char cirith_test] [-Scene battle_terrain_a] [-ShotDelay 8] [-Timeout 150]
   output: enginesim\out\engine_<char>.png, enginesim\out\engine_<char>.log
 #>
-param([string]$Char = 'cirith_test', [string]$Scene = 'battle_terrain_a', [int]$ShotDelay = 8, [int]$Timeout = 150, [switch]$KeepOpen, [switch]$Visible, [string]$Views = '', [string]$ExtraModules = '', [string]$Pre = '')
+param([string]$Char = 'cirith_test', [string]$Scene = 'battle_terrain_a', [int]$ShotDelay = 8, [int]$Timeout = 150, [switch]$KeepOpen, [switch]$Visible, [string]$Views = '', [string]$ExtraModules = '', [string]$Pre = '', [string]$Modules = '')
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $game = 'T:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord'
@@ -45,10 +45,12 @@ if ($Views) { $env:CIRITH_VIEWS = (Resolve-Path $Views).Path } else { $env:CIRIT
 Remove-Item (Join-Path $mod 'shots') -Recurse -Force -ErrorAction SilentlyContinue
 # --- launch
 $env:CIRITH_CHAR = $Char; $env:CIRITH_SCENE = $Scene
-# live play (-Visible): StuffedHole's Enhanced Third Person camera + its requirements (Harmony, ButterLib, UIExtenderEx, MCM) are loaded too when installed in Modules$camMod = Join-Path $game 'Modules\StuffedHoleEnhancedThirdPerson'
+# live play (-Visible): StuffedHole's Enhanced Third Person camera + its requirements (Harmony, ButterLib, UIExtenderEx, MCM) are loaded too when installed in Modules
+$camMod = Join-Path $game 'Modules\StuffedHoleEnhancedThirdPerson'
 $pre = $Pre
 if ($Visible -and -not $ExtraModules -and (Test-Path $camMod)) { $pre = 'Bannerlord.Harmony*Bannerlord.ButterLib*Bannerlord.UIExtenderEx*Bannerlord.MBOptionScreen*'; $ExtraModules = 'StuffedHoleEnhancedThirdPerson' }
 $mods = if ($ExtraModules) { $pre + 'Native*SandBoxCore*Sandbox*StoryMode*CustomBattle*' + $ExtraModules + '*CirithSim' } else { 'Native*SandBoxCore*CustomBattle*CirithSim' }
+if ($Modules) { $mods = $Modules }
 $args = "/singleplayer _MODULES_*$mods*_MODULES_"
 if ($Visible) {
   $env:CIRITH_CHAR = $Char; $env:CIRITH_SCENE = $Scene; $env:CIRITH_NOCAM = '1'; $env:CIRITH_RUNTIME = '1'; $env:CIRITH_LIVE = '1'
