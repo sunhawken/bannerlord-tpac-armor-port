@@ -20,7 +20,7 @@ namespace CirithSim
             try
             {
                 var t = Environment.GetEnvironmentVariable("CIRITH_HITTOL"); if (!string.IsNullOrEmpty(t) && float.TryParse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v)) Tol = v;
-                if (Environment.GetEnvironmentVariable("CIRITH_HITBOX") == "0") { SimSubModule.L("hitbox: disabled by CIRITH_HITBOX=0"); return; }
+                if (Environment.GetEnvironmentVariable("CIRITH_HITBOX") != "1") { SimSubModule.L("hitbox: real-geometry filter is OFF (set CIRITH_HITBOX=1 to test it) - the engine hitbox is used"); return; }
                 if (!AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "0Harmony")) { SimSubModule.L("hitbox: Harmony not loaded - engine hitbox stays"); return; }
                 Patch();
             }
