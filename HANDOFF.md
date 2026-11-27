@@ -99,3 +99,5 @@ Game is now at T:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord (T: 
 - Probe tooling: transplant/dump_probe.py + item cirith_probe + CIRITH_RESTPOSE=1 (rest-pose override) + CIRITH_PROXYMESH=cirith_probe.
 - run_engine_sim.ps1 now auto-kills the game's crash dialog (opera_crashreporter) and leftover Bannerlord processes must be killed (taskkill /F /IM Bannerlord.exe) before a rerun.
 - Not done / limits: engine animation assets cannot be added by a module (clips are bone overrides); combat uses the engine's own animations; enemy NPC armor appears black in the sim (pre-existing); the sprint key uses Input.IsKeyDown (not exercised with a real keyboard, the test drives it through an override).
+
+## FINAL STATE 2026-11-27: see docs\MODIFIED_FILES.md and docs\TEST_RESULTS.md. Open item: the user's grip_edits.json (sword placement per pose) -> transplant\apply_grip_edits.py -> rebuild/run.

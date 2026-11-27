@@ -98,8 +98,9 @@ namespace CirithSim
         public void Update(Agent me, float dt)
         {
             if (!tried) Load(); if (!loaded) return;
-            if (me == null || me.AgentVisuals == null) return;
-            if (!me.IsActive()) { Release(me, "dead"); return; }
+            if (me == null) return;
+            if (!me.IsActive()) { Release(me, "dead"); Dispose(); return; }
+            if (me.AgentVisuals == null) return;
             if (!IsWielding(me)) { if (Current != State.None || boosted) Release(me, "weapon no longer wielded"); ShowProxy(me, false); havePos = false; return; }
             ShowProxy(me, true);
             // ---- velocity (horizontal, smoothed)
@@ -220,6 +221,8 @@ namespace CirithSim
             }
             catch (Exception e) { SimSubModule.L("weapon proxy err " + e.Message); }
         }
+        // remove the sword entity (agent died / mission ends) - never leave a floating sword behind
+        public void Dispose() { if (swordEnt != null) { try { swordEnt.Remove(0); } catch { } swordEnt = null; SimSubModule.L("weapon proxy removed (dispose)"); } }
         void UpdateProxy(Agent me)
         {
             if (swordEnt == null) return;

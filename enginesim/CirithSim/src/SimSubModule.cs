@@ -118,7 +118,7 @@ namespace CirithSim
 
 
         // ---- weapon animation test (CIRITH_WTEST=1, character cirith_sword_test): scripted idle -> walk -> run -> sprint -> run -> idle -> other weapon -> back; side camera frames in shots/
-        WeaponAnim wa = new WeaponAnim(); float wt = -1; int wshot; Camera wcam; bool wInit; string wlast = "";
+        WeaponAnim wa = new WeaponAnim(); int lastSwap = -1, swaps; bool killed; float wt = -1; int wshot; Camera wcam; bool wInit; string wlast = "";
         bool WTest(float dt)
         {
             if (Environment.GetEnvironmentVariable("CIRITH_WTEST") != "1") return false;
@@ -134,6 +134,21 @@ namespace CirithSim
             catch (Exception e) { SimSubModule.L("wtest cam err " + e.Message); }
             if (!wInit) { wInit = true; wa.UseOverrides = true; try { me.Controller = AgentControllerType.None; } catch { } }
             string label; float spd = 0; bool sprint = false;
+            if (Environment.GetEnvironmentVariable("CIRITH_WSTRESS") == "1")
+            {   // stress: states change every 0.25 s, the weapon is swapped in/out every 0.9 s, then the agent is killed while the controller is active
+                if (wt < 5f) label = "settle";
+                else if (wt < 30f) { int c = (int)((wt - 5f) / 0.25f) % 6; label = "stress"; spd = new[] { 0f, 1.5f, 3.8f, 5.6f, 3.8f, 0f }[c]; sprint = c == 3; }
+                else label = "death";
+                if (wt >= 5f && wt < 30f) { int sw = (int)((wt - 5f) / 0.9f); if (sw != lastSwap) { lastSwap = sw; try { me.TryToWieldWeaponInSlot(sw % 2 == 0 ? EquipmentIndex.Weapon0 : EquipmentIndex.Weapon2, Agent.WeaponWieldActionType.Instant, false); swaps++; } catch (Exception e) { SimSubModule.L("stress wield err " + e.Message); } } }
+                if (wt >= 4.5f && wt < 4.6f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); } catch { } }
+                if (wt >= 30.5f && wt < 30.6f) { try { me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); } catch { } }
+                if (wt >= 31.8f && !killed) { killed = true; try { SimSubModule.L($"stress: killing while the controller is active (state={wa.Current}, cirith wielded={WeaponAnim.IsWielding(me)})"); var blow = new Blow(me.Index) { DamageType = DamageTypes.Cut, StrikeType = StrikeType.Swing, AttackType = AgentAttackType.Standard, BaseMagnitude = 9999f, InflictedDamage = 9999, GlobalPosition = me.Position + new Vec3(0, 0, 1.2f), Direction = Vec3.Forward, SwingDirection = Vec3.Forward, VictimBodyPart = BoneBodyPartType.Chest, DamageCalculated = true, NoIgnore = true };
+                    var cd = AttackCollisionData.GetAttackCollisionDataForDebugPurpose(false, false, false, true, false, false, false, false, false, false, false, false, CombatCollisionResult.StrikeAgent, 0, (int)StrikeType.Swing, (int)DamageTypes.Cut, 0, BoneBodyPartType.Chest, 0, Agent.UsageDirection.AttackUp, 0, CombatHitResultFlags.NormalHit, 0.5f, 0.5f, 0f, 0f, 0f, 0f, 0f, 0f, Vec3.Up, Vec3.Forward, blow.GlobalPosition, Vec3.Zero, Vec3.Zero, Vec3.Zero, Vec3.Up); me.RegisterBlow(blow, in cd); SimSubModule.L($"stress: agent killed (health now {me.Health:0}, active={me.IsActive()})"); } catch (Exception e) { SimSubModule.L("kill err " + e.Message); } }
+                wa.SprintHeldOverride = sprint; if (spd > 0 && me.IsActive()) { try { var f0 = me.LookDirection; f0.z = 0; f0.Normalize(); var np = me.Position + f0 * (spd * dt); np.z = me.Position.z; me.TeleportToPosition(np); } catch { } }
+                try { wa.Update(me, dt); } catch (Exception e) { SimSubModule.L("STRESS EXCEPTION in controller: " + e); }
+                if (wt > 34f) { SimSubModule.L($"stress done: {swaps} weapon swaps, agent active={me.IsActive()}, controller state={wa.Current}"); Utilities.ExitProcess(0); }
+                return true;
+            }
             if (wt < 5f) label = "settle"; else if (wt < 8f) label = "idle"; else if (wt < 12f) { label = "walk"; spd = 1.5f; } else if (wt < 16f) { label = "run"; spd = 3.8f; }
             else if (wt < 20f) { label = "sprint"; spd = 5.6f; sprint = true; } else if (wt < 23f) { label = "run again"; spd = 3.8f; } else if (wt < 26f) label = "idle again";
             else if (wt < 29f) label = "other weapon"; else label = "cirith again";
