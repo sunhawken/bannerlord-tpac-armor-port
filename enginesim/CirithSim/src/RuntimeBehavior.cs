@@ -18,7 +18,7 @@ namespace CirithSim
             try { var eq = a.SpawnEquipment; foreach (var i in new[] { EquipmentIndex.Head, EquipmentIndex.Body, EquipmentIndex.Leg, EquipmentIndex.Gloves }) { var id = eq[i].Item?.StringId; if (id != null && id.StartsWith("cirith_")) return true; } } catch { }
             return false;
         }
-        bool ctlSet; TaleWorlds.Engine.Camera acam; string shotDir; int lastShot = -1; float life; bool autoDone, gWas, giveTested;
+        int lastVoice = -1; bool ctlSet; TaleWorlds.Engine.Camera acam; string shotDir; int lastShot = -1; float life; bool autoDone, gWas, giveTested;
         static bool HasSword(Agent a) { try { for (var i = EquipmentIndex.Weapon0; i <= EquipmentIndex.Weapon3; i++) if (a.Equipment[i].Item?.StringId == WeaponAnim.Item) return true; } catch { } return false; }
         static void Wield(Agent a, bool on) { try { if (on) { for (var i = EquipmentIndex.Weapon0; i <= EquipmentIndex.Weapon3; i++) if (a.Equipment[i].Item?.StringId == WeaponAnim.Item) { a.TryToWieldWeaponInSlot(i, Agent.WeaponWieldActionType.WithAnimation, false); break; } } else a.TryToSheathWeaponInHand(Agent.HandIndex.MainHand, Agent.WeaponWieldActionType.WithAnimation); } catch (Exception e) { SimSubModule.L("wield err " + e.Message); } }
         static bool SafeCtrl() { try { return TaleWorlds.InputSystem.Input.IsKeyDown(TaleWorlds.InputSystem.InputKey.LeftControl) || TaleWorlds.InputSystem.Input.IsKeyDown(TaleWorlds.InputSystem.InputKey.RightControl); } catch { return false; } }
@@ -42,7 +42,7 @@ namespace CirithSim
         bool SafeG() { try { bool d = TaleWorlds.InputSystem.Input.IsKeyDown(TaleWorlds.InputSystem.InputKey.G); bool r = d && !gWas; gWas = d; return r; } catch { return false; } }
         public override void OnMissionTick(float dt)
         {
-            life += dt; if (SimSubModule.Harness && Environment.GetEnvironmentVariable("CIRITH_RUNTIME") == "1" && Environment.GetEnvironmentVariable("CIRITH_LIVE") != "1" && life > (Environment.GetEnvironmentVariable("CIRITH_ATTACKTEST") == "1" ? 40f : 20f)) { SimSubModule.L("runtime test: done (jiggle agents tracked: " + jig.Count + ", main=" + (Agent.Main != null) + ")"); TaleWorlds.Engine.Utilities.ExitProcess(0); }
+            life += dt; if (SimSubModule.Harness && Environment.GetEnvironmentVariable("CIRITH_RUNTIME") == "1" && Environment.GetEnvironmentVariable("CIRITH_LIVE") != "1" && life > (Environment.GetEnvironmentVariable("CIRITH_ATTACKTEST") == "1" ? 40f : Environment.GetEnvironmentVariable("CIRITH_VOICETEST") == "1" ? 25f : 20f)) { SimSubModule.L("runtime test: done (jiggle agents tracked: " + jig.Count + ", main=" + (Agent.Main != null) + ")"); TaleWorlds.Engine.Utilities.ExitProcess(0); }
             try
             {
                 var m = Agent.Main;
@@ -68,6 +68,10 @@ namespace CirithSim
                         int sh = (int)(at / 0.35f); if (sh != lastShot) { lastShot = sh; try { TaleWorlds.Engine.Utilities.TakeScreenshot(System.IO.Path.Combine(shotDir, "atk_" + sh.ToString("00") + ".bmp")); } catch { } SimSubModule.L("atk shot " + sh + " actionType=" + m.GetCurrentActionType(1) + " hold=" + WeaponAnim.IsWielding(m)); }
                     }
                     if (at > 9f) TaleWorlds.Engine.Utilities.ExitProcess(0);
+                }
+                if (Environment.GetEnvironmentVariable("CIRITH_VOICETEST") == "1" && m != null && m.IsActive())
+                {   // test: ask the engine for each voice type; the Harmony prefix must swap them for the WAVs
+                    int vi = (int)((life - 4f) / 1.2f); if (life > 4f && vi != lastVoice && vi < 12) { lastVoice = vi; var vt = new[] { SkinVoiceManager.VoiceType.Grunt, SkinVoiceManager.VoiceType.Jump, SkinVoiceManager.VoiceType.Yell, SkinVoiceManager.VoiceType.Pain, SkinVoiceManager.VoiceType.Death, SkinVoiceManager.VoiceType.Stun, SkinVoiceManager.VoiceType.Fear, SkinVoiceManager.VoiceType.Climb, SkinVoiceManager.VoiceType.Focus, SkinVoiceManager.VoiceType.Debacle, SkinVoiceManager.VoiceType.Victory, SkinVoiceManager.VoiceType.Drown }; try { m.MakeVoice(vt[vi], SkinVoiceManager.CombatVoiceNetworkPredictionType.NoPrediction); } catch (Exception ve) { SimSubModule.L("voice test err " + ve.Message); } }
                 }
                 foreach (var a in Mission.Current.Agents)
                 {

@@ -17,5 +17,7 @@
     <Reference Include="TaleWorlds.DotNet"><HintPath>$(G)/bin/Win64_Shipping_Client/TaleWorlds.DotNet.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TaleWorlds.MountAndBlade.View"><HintPath>$(G)/Modules/Native/bin/Win64_Shipping_Client/TaleWorlds.MountAndBlade.View.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TaleWorlds.MountAndBlade.CustomBattle"><HintPath>$(G)/Modules/CustomBattle/bin/Win64_Shipping_Client/TaleWorlds.MountAndBlade.CustomBattle.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="TaleWorlds.Localization"><HintPath>$(G)/bin/Win64_Shipping_Client/TaleWorlds.Localization.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(G)/Modules/Bannerlord.Harmony/bin/Win64_Shipping_Client/0Harmony.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 </Project>
