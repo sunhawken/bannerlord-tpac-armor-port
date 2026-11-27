@@ -53,3 +53,6 @@ Areola decal geometry experiments were ABANDONED on request (code kept behind en
 - Verified with CIRITH_MOTION=1: glutes/hip trims visibly move, ponytail swings. Frames in Modules\CirithSim\shots; montages enginesim\out\motion_montage3.png, motion_chest.png. Vanilla-dress positive control NOT re-run for the DLL rig. Breasts not yet inspected from a front/side close-up (use a CIRITH_VIEWS file + CIRITH_MOTION is exclusive - the motion camera is side-on, so add a front camera mode if needed).
 - Gotchas: engine runs ~180 fps headless (dt 5.6 ms); screenshots cause frame hitches -> Jiggle re-syncs velocity when dt>0.1. Boot is now ~1 min. Environment variables must be set in the same shell call as the run.
 - TODO: tune amplitudes (gain 1 = up to 3.5 cm), front/side breast close-up, positive control comparison, bake settings into a config file.
+
+## UPDATE 2026-11-26 (areola fix)
+Areola was painted at atlas (218,76) = vertices at y=-0.075 = her BACK (front is +y; the old session assumed -y). Moved to the front breast UV island (138,115), radii 12x9.5 px (gem_mask.py). Verified front/back with enginesimiews_areola.txt (CIRITH_VIEWS; target height is metres above feet, use 1.3 for chest). Nipple apex triangles have degenerate UVs (41-76,221-253, shared with other geometry) so the very tip is not painted.

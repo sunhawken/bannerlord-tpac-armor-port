@@ -52,7 +52,7 @@ print('skin px lifted', int(skin.sum()))
 # ---- very dark, bigger areolas. Both breasts share one UV spot (the body UVs are mirrored): the front-most breast vertex sits at atlas px (218,76).
 # measured texel density there: 0.36 cm/px along u, 0.30 cm/px along v -> an areola ~6.5 cm across = ellipse radii ~9 x 11 px. Detail comes from the Venice swatch if present.
 import os
-cx0, cy0, rx, ry = 218.0, 76.0, 15.5, 18.5     # ~11 cm across: big and obvious
+cx0, cy0, rx, ry = 138.0, 115.0, 12.0, 9.5     # front breast UV island (verified: nearby verts have y>0.098 = front). The old (218,76) spot was on the BACK (y=-0.075).
 yy, xx = np.mgrid[0:H, 0:W]
 rr = np.sqrt(((xx - cx0) / rx) ** 2 + ((yy - cy0) / ry) ** 2)
 edge = np.clip((1.08 - rr) / 0.18, 0, 1)                       # fairly crisp rim
