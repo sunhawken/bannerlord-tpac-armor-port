@@ -36,6 +36,14 @@ hk = Pk_rest[1][1] - Pk_rest[23][1]; hb = Pb_rest[0][1] - Pb_rest[3][1]; SCALE =
 a = rk.anims[ANIM]; dur = a['dur']; FPS = 30.0; nfr = max(2, int(round(dur * FPS)))
 print('anim', ANIM, a['name'], 'dur', dur, 'frames', nfr, 'scale', round(SCALE, 4), 'KUF pelvis h', round(hk, 2), 'BL', round(hb, 3))
 S = np.diag([1.0, 1.0, -1.0]) if MIRROR else np.diag([-1.0, 1.0, -1.0])      # KUF faces +z, Bannerlord faces -z (glTF world): her model is turned 180 deg about the vertical axis (Cirith L -> Bannerlord r): deltas transform as Q R Q
+# the game mesh arms were rotated down about the shoulder (dump_slots.angle_arms: -18.4 deg right / +19.2 deg left about the model y axis) to sit on Bannerlord's lower-armed rest pose.
+# The delta retarget keeps motion relative to rest, so every arm pose came out that much too low; compensating: Wd = delta * Ra^-1 * Rb  (Ra = that tilt, in glTF world axes).
+def _ra(phi):
+    c_, s_ = np.cos(phi), np.sin(phi); Rm = np.array([[c_, 0, -s_], [0, 1, 0], [s_, 0, c_]]); return Rroot @ Rm @ Rroot.T
+ARMFIX = {}
+if not MIRROR and os.environ.get('ARMFIX', '0') == '1':
+    for _b in (22, 24, 26): ARMFIX[_b] = _ra(-0.3215).T          # right arm: upper arm, forearm, hand
+    for _b in (15, 17, 19): ARMFIX[_b] = _ra(+0.3351).T          # left arm
 frames = []; dz = []; rootpos = []; footz = []; handp = []
 GRIPC = None
 # ---- user edits from the grip editor (grip_editor/grip_edits.json): extra rotation per pose and bone, degrees, Euler XYZ (R = Rx Ry Rz), post-multiplied onto the bone's local rotation
@@ -64,7 +72,7 @@ for f in range(nfr):
     Wd = [None] * len(bn)                                         # desired world rotation of every Bannerlord bone
     for b in range(len(bn)):                                      # joints are listed parents-first
         if b in INV:
-            k = INV[b]; delta = Rk[k] @ Rk_rest[k].T; delta = S @ delta @ S; Wd[b] = delta @ Rb_rest[b]
+            k = INV[b]; delta = Rk[k] @ Rk_rest[k].T; delta = S @ delta @ S; Wd[b] = delta @ ARMFIX.get(b, np.eye(3)) @ Rb_rest[b]
             if GRIPC is not None and b == 19: Wd[b] = Wd[b] @ GRIPC
         else:
             Wd[b] = (Wd[par[b]] if par[b] >= 0 else Rroot) @ (Rb_rest[par[b]].T @ Rb_rest[b] if par[b] >= 0 else np.eye(3))
@@ -116,7 +124,10 @@ for adj in ADJ:                                                                 
         if c is None or c < 0: w = 1.0
         else:
             d = abs(i - c); d = min(d, NT - d); w = float(np.exp(-0.5 * (d / (wd / 2.0)) ** 2))
-        if w > 1e-3: dense[i, bi] = dense[i, bi] @ _rxyz(R * w)
+        if w > 1e-3:
+            Rw = _rxyz(R * w); dense[i, bi] = dense[i, bi] @ Rw
+            if adj.get('iso'):                                                                     # "move only this joint": the next bones keep their world orientation -> pre-multiply the inverse
+                for ch in [c for c in range(len(bn)) if par[c] == bi]: dense[i, ch] = Rw.T @ dense[i, ch]
 with open('../enginesim/CirithSim/module/ModuleData/cirith_anim_' + OUTNAME + '.txt', 'w') as fh:
     fh.write(f'60 {NT} {len(bn)} {hs:.3f} {natv:.3f} {len(wins)}' + ''.join(f' {a:.3f} {b:.3f}' for a, b in wins) + chr(10))
     for i in range(NT): fh.write(f'{dzd[i]:.5f} {rfw[i]:.5f} {rlat[i]:.5f} ' + ' '.join(f'{x:.6f}' for x in dense[i].ravel()) + chr(10))

@@ -9,6 +9,12 @@ for label, f in (('idle', 'idle'), ('walk', 'walk'), ('run', 'run'), ('sprint', 
     for i in range(n):
         p = L[i + 1].split(); dz.append(round(float(p[0]), 5)); rot.extend(round(float(x), 5) for x in p[3:3 + nb * 9])
     clips[label] = dict(n=n, nb=nb, dz=dz, rot=rot)
+# T-pose clip: every bone at its rest local rotation (the engine rest pose = Bannerlord's T-pose)
+from pose import Rig as _Rig, qmat as _qmat
+from glbio import Glb as _Glb
+_g = _Glb('out_rig/cirith_armor_rigged.glb'); _r = _Rig(_g); _rot = []
+for _j in _r.joints: _rot.extend(round(float(x), 5) for x in _qmat(_r.r0[_j]).ravel())
+clips['tpose'] = dict(n=1, nb=28, dz=[0.0], rot=_rot)
 json.dump(dict(fps=60, clips=clips), open('../grip_editor/data/clips.json', 'w'))
 from glbio import Glb
 g = Glb(r'C:\Users\Trey\Downloads\DFG\weapons\E_DS_NZ_R.glb'); _, _, d = list(g.primitives())[0]

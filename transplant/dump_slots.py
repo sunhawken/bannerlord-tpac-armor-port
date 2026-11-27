@@ -1,5 +1,5 @@
 """dump rigged Cirith slot meshes -> binary for the C# armorpack verb.  per slot: name, n, nf, then pos,nrm,uv,jnt(u8x4),wgt(u8x4 sum 255),idx(i32)"""
-import struct, sys, numpy as np
+import os, struct, sys, numpy as np
 from glbio import Glb
 def zup(a):  # glTF Y-up (Root rotated -90deg about X) -> Bannerlord Z-up:  (x,y,z) -> (x,-z,y)
     a = a.astype(np.float32); return np.stack([a[:, 0], -a[:, 2], a[:, 1]], 1).astype('<f4')
@@ -161,7 +161,7 @@ def merged(n):
     if n == 'cirith_hands_armor' and not hands:
         # grip fit: Bannerlord puts the weapon in the palm of ITS hand; her hand sat ~5 cm closer to the wrist (floating above the grab point).
         # Slide each hand along the arm direction so its proximal end matches the native hand's (measured against hands_female_a), plus the small perpendicular offset.
-        for sg in (1.0, -1.0):
+        for sg in ((1.0, -1.0) if os.environ.get('RIGHT_FIT') == '1' else (-1.0,)):      # the slide was made for the sword hand (Bannerlord's LEFT hand); the right hand keeps her original shape
             m = d['pos'][:, 0] * sg > 0.3
             a = np.array([sg * 0.83, 0.0, -0.55]); a /= np.linalg.norm(a)
             delta = 0.052 * a + np.array([-0.009 * sg, 0.006, -0.013])
@@ -172,7 +172,7 @@ def merged(n):
         bp = {k: angle_arms(prims[k]['pos'], prims[k]['nrm'], prims[k]['jnt'], prims[k]['wgt'])[0] for k in ('cirith_body_armor', 'cirith_body_trim_armor')}
         bj = {k: prims[k] for k in bp}
         P, Nn, U, J, Wt, F = [], [], [], [], [], []
-        for sg, side in ((1.0, 'r'), (-1.0, 'l')):
+        for sg, side in (((1.0, 'r'), (-1.0, 'l')) if os.environ.get('RIGHT_FIT') == '1' else ((-1.0, 'l'),)):      # no wrist sleeve on the right hand either
             a = np.array([sg * 0.83, 0.0, -0.55]); a /= np.linalg.norm(a)
             ids = [_names.index(side + '_foretwist'), _names.index(side + '_foretwist1')]
             fa = np.concatenate([bp[k][np.isin(np.take_along_axis(bj[k]['jnt'], np.argmax(bj[k]['wgt'], 1)[:, None], 1)[:, 0], ids) & (bp[k][:, 0] * sg > 0.3)] for k in bp])

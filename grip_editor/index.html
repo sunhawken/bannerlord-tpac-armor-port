@@ -28,7 +28,7 @@
 <div id="view"><div id="hud">drag = orbit · wheel = zoom · right-drag = pan</div></div>
 <div id="side">
   <h1>Cirith sword grip editor</h1>
-  <p class="help"><b>This is now the exact model the game uses</b> (same hands, wrist sleeves and arms). Her body plays her original animation untouched. For each pose, move and turn the <b>sword</b> in her left hand until it sits where you want it. When you are happy, press <b>Save edits</b> and send me the downloaded <code>grip_edits.json</code>.</p>
+  <p class="help"><b>This is the exact model the game uses</b> (the <b>T-pose</b> tab is the rest pose, free to pose and send back) (same hands, wrist sleeves and arms). Her body plays her original animation untouched. For each pose, move and turn the <b>sword</b> in her left hand until it sits where you want it. When you are happy, press <b>Save edits</b> and send me the downloaded <code>grip_edits.json</code>.</p>
 
   <h2>Pose</h2>
   <div class="tabs" id="tabs"></div>
@@ -53,6 +53,7 @@
   <h2>Joints</h2>
   <p class="help">The <span style="color:#3ddc84">green balls</span> are her joints (shoulder, elbow, wrist, hand, hips, spine, neck, head, knee, ankle, toe). <b>Drag one</b> to bend the body. Choose whether the change applies to the <b>whole animation</b> or only <b>around the moment</b> you are on (pause on a frame first).</p>
   <div class="row"><label class="chk"><input type="checkbox" id="showJoints" checked> show joint balls</label></div>
+  <div class="row" style="margin-top:6px"><label class="chk" style="color:#e6edf3"><input type="checkbox" id="isoMode"> <b>Move only this joint</b> (the joints after it keep their direction instead of following)</label></div>
   <div class="row" style="margin-top:6px"><button id="modeAll" class="on">Whole animation</button><button id="modeMoment">Just around this moment</button></div>
   <div class="row" style="margin-top:6px"><span style="color:var(--mut)">moment width</span><input id="jwidth" type="range" min="2" max="60" value="14" style="flex:1"><span id="jwl" style="color:var(--mut);width:48px">14 fr</span></div>
   <div id="jsel" class="bone" style="display:none"></div>
@@ -71,8 +72,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const BONES = ['pelvis','l_thigh','l_calf','l_foot','l_toe0','r_thigh','r_calf','r_foot','r_toe0','spine','spine1','spine2','neck','head','l_clavicle','l_upperarm_twist','l_upperarm_twist1','l_foretwist','l_foretwist1','l_hand','l_finger0','r_clavicle','r_upperarm_twist','r_upperarm_twist1','r_foretwist','r_foretwist1','r_hand','r_finger0'];
 // per pose: pos = sword offset in cm (in her left-hand's own axes), rot = sword rotation in degrees about the sword's own axes (X = across the guard, Y = thin side, Z = along the blade)
-const SW = [['pos','Move the sword (cm)',-60,60,0.5],['rot','Turn the sword (degrees)',-180,180,1]];
-const CLIPS = [['idle','Idle'],['walk','Walk'],['run','Run'],['sprint','Sprint']];
+const SW = [['pos','Move the sword (cm)',-300,300,0.5],['rot','Turn the sword (degrees)',-720,720,1]];
+const CLIPS = [['idle','Idle'],['walk','Walk'],['run','Run'],['sprint','Sprint'],['tpose','T-pose']];
 const KEY = 'cirithSwordEdits.v3';
 // joint balls: [id, label, bone whose origin (+ local offset) is the ball, local offset (m) or null, bone that ROTATES when the ball is dragged]
 const JOINTS = [['hips','Hips','spine',null,'pelvis'],['spine','Lower spine','spine1',null,'spine'],['chest','Chest','spine2',null,'spine1'],['upper','Upper back','neck',null,'spine2'],['neck','Neck','head',null,'neck'],['head','Head','head',[0.16,0,0],'head']];
@@ -136,14 +137,14 @@ function buildUI() {
     const d = document.createElement('div'); d.className = 'bone'; d.innerHTML = `<b>${label}</b>`;
     ['x','y','z'].forEach((ax, i) => {
       const r = document.createElement('div'); r.className = 'ax';
-      r.innerHTML = `<label>${ax.toUpperCase()}</label><input type="range" min="${lo}" max="${hi}" step="${st}" value="0" data-k="${kind}" data-i="${i}"><input type="number" min="${lo}" max="${hi}" step="${st}" value="0" data-kn="${kind}" data-i="${i}">`;
+      r.innerHTML = `<label>${ax.toUpperCase()}</label><input type="range" min="${lo}" max="${hi}" step="${st}" value="0" data-k="${kind}" data-i="${i}"><input type="number" step="${st}" value="0" data-kn="${kind}" data-i="${i}">`;
       d.appendChild(r);
     });
     host.appendChild(d);
   }
   host.addEventListener('input', e => {
     const t = e.target; const kind = t.dataset.k || t.dataset.kn; if (!kind) return; const i = +t.dataset.i; const lim = SW.find(x => x[0] === kind);
-    let v = Math.max(lim[2], Math.min(lim[3], +t.value || 0));
+    let v = +t.value || 0;                       // no limits
     const e3 = (edits[clip][kind] = edits[clip][kind] || [0, 0, 0]); e3[i] = v; syncUI(); persist(); apply();
   });
   document.getElementById('play').onclick = () => { playing = !playing; document.getElementById('play').textContent = playing ? 'Pause' : 'Play'; document.getElementById('play').classList.toggle('on', playing); };
@@ -170,7 +171,7 @@ function syncUI() {
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(edits)); } catch (e) {} }
 function save() {
   const out = { version: 3, note: 'made on the exact game mesh. adj = joint changes (rot degrees Euler XYZ on the bone, center -1 = whole animation else frame, width in frames). sword placement per pose: pos = offset in cm along her left-hand bone axes, rot = degrees (Euler XYZ) about the sword own axes', clips: {} };
-  for (const [c] of CLIPS) { out.clips[c] = {}; for (const [kind] of SW) { const e3 = edits[c][kind]; if (e3 && (e3[0] || e3[1] || e3[2])) out.clips[c][kind] = e3.map(Number); } const ad = (edits[c].adj || []).filter(a => a.rot.some(v => Math.abs(v) > 0.05)); if (ad.length) out.clips[c].adj = ad.map(a => ({ bone: a.bone, rot: a.rot.map(Number), center: a.center == null ? -1 : a.center, width: a.width || 12 })); }
+  for (const [c] of CLIPS) { out.clips[c] = {}; for (const [kind] of SW) { const e3 = edits[c][kind]; if (e3 && (e3[0] || e3[1] || e3[2])) out.clips[c][kind] = e3.map(Number); } const ad = (edits[c].adj || []).filter(a => a.rot.some(v => Math.abs(v) > 0.05)); if (ad.length) out.clips[c].adj = ad.map(a => ({ bone: a.bone, rot: a.rot.map(Number), center: a.center == null ? -1 : a.center, width: a.width || 12, iso: !!a.iso })); }
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' })); a.download = 'grip_edits.json'; a.click(); URL.revokeObjectURL(a.href);
   status('Saved grip_edits.json to your Downloads folder - send it to me.');
 }
@@ -181,7 +182,9 @@ function adjWeight(a, f, n) { if (a.center == null || a.center < 0) return 1; le
 function adjQuat(a, f, n) { const w = adjWeight(a, f, n); eu.set(a.rot[0] * toRad * w, a.rot[1] * toRad * w, a.rot[2] * toRad * w, 'XYZ'); return new THREE.Quaternion().setFromEuler(eu); }
 function animQuat(i, f, c) { const k = f * c.nb * 9 + i * 9, r = c.rot; m4.set(r[k], r[k + 1], r[k + 2], 0, r[k + 3], r[k + 4], r[k + 5], 0, r[k + 6], r[k + 7], r[k + 8], 0, 0, 0, 0, 1); return new THREE.Quaternion().setFromRotationMatrix(m4); }
 // local rotation of a bone at frame f = clip rotation * (all adjustments of that bone, in list order, except `skip`)
-function boneLocalQuat(name, f, skip) { const c = clipsData.clips[clip]; const q = animQuat(BONES.indexOf(name), f, c); for (const a of (edits[clip].adj || [])) if (a !== skip && a.bone === name) q.multiply(adjQuat(a, f, c.n)); return q; }
+function boneLocalQuat(name, f, skip) { const c = clipsData.clips[clip]; const q = animQuat(BONES.indexOf(name), f, c); const pn = bones[name] && bones[name].parent ? bones[name].parent.name : '';
+  for (const a of (edits[clip].adj || [])) if (a.iso && a.bone === pn && a !== skip) q.premultiply(adjQuat(a, f, c.n).invert());           // 'move only this joint': the parent's change is cancelled here
+  for (const a of (edits[clip].adj || [])) if (a !== skip && a.bone === name) q.multiply(adjQuat(a, f, c.n)); return q; }
 function apply() {
   const c = clipsData.clips[clip]; const f = Math.max(0, Math.min(c.n - 1, Math.floor(frame))); const o = f * c.nb * 9;
   for (let i = 0; i < BONES.length; i++) {
@@ -217,13 +220,13 @@ function setupDrag() {
     const hand = bones['l_hand']; hand.updateWorldMatrix(true, false); const local = hand.worldToLocal(hit.clone());          // the dragged point in her left-hand bone frame (metres)
     const ed = edits[clip];
     if (drag === ballMove) {
-      const p = [local.x * 100, local.y * 100, local.z * 100].map(v => Math.max(-60, Math.min(60, Math.round(v * 2) / 2))); ed.pos = p;
+      const p = [local.x * 100, local.y * 100, local.z * 100].map(v => Math.round(v * 2) / 2); ed.pos = p;
     } else {
       const org = new THREE.Vector3().setFromMatrixPosition(sword.matrix); const dir = local.clone().sub(org); if (dir.length() < 0.02) return; dir.normalize();
       const cur = new THREE.Vector3(0, 0, 1).transformDirection(sword.matrix);                                                // current blade direction in the hand frame
       const q = new THREE.Quaternion().setFromUnitVectors(cur, dir); const rot = new THREE.Matrix4().extractRotation(sword.matrix); const rotNew = new THREE.Matrix4().makeRotationFromQuaternion(q).multiply(rot);
       const edit = swordBase.clone().extractRotation(swordBase).transpose().multiply(rotNew);                                   // R_edit = B^T * R_new   (R = B * R_edit)
-      const eu2 = new THREE.Euler().setFromRotationMatrix(edit, 'XYZ'); ed.rot = [eu2.x, eu2.y, eu2.z].map(v => Math.max(-180, Math.min(180, Math.round(v * 180 / Math.PI))));
+      const eu2 = new THREE.Euler().setFromRotationMatrix(edit, 'XYZ'); ed.rot = [eu2.x, eu2.y, eu2.z].map(v => Math.round(v * 180 / Math.PI));
     }
     syncUI(); persist(); apply();
   });
@@ -233,7 +236,7 @@ function setupDrag() {
 }
 const frameCount = () => clipsData.clips[clip].n;
 function findAdj(bone, mode) { const f = Math.floor(frame); return adjList().find(a => a.bone === bone && (mode === 'all' ? (a.center == null || a.center < 0) : (a.center >= 0 && Math.abs(a.center - f) <= 2))); }
-function ensureAdj(bone) { let a = findAdj(bone, jmode); if (!a) { a = { bone, rot: [0, 0, 0], center: jmode === 'all' ? -1 : Math.floor(frame), width: +document.getElementById('jwidth').value }; adjList().push(a); } return a; }
+function ensureAdj(bone) { let a = findAdj(bone, jmode); if (!a) { a = { bone, rot: [0, 0, 0], center: jmode === 'all' ? -1 : Math.floor(frame), width: +document.getElementById('jwidth').value, iso: document.getElementById('isoMode').checked }; adjList().push(a); } return a; }
 function dragJoint(j) {
   const rb = bones[j[4]]; if (!rb || !rb.parent) return; const f = Math.floor(frame), n = frameCount();
   rb.updateWorldMatrix(true, false); const pivot = rb.getWorldPosition(new THREE.Vector3());
@@ -244,26 +247,27 @@ function dragJoint(j) {
   const a = dragAdj && dragAdj.bone === j[4] ? dragAdj : ensureAdj(j[4]); dragAdj = a; selAdj = a;
   const qBase = boneLocalQuat(j[4], f, a); const qEff = qBase.invert().multiply(qNewLocal);       // adjustment that is needed at this frame
   const w = Math.max(0.15, adjWeight(a, f, n)); const e3 = new THREE.Euler().setFromQuaternion(qEff, 'XYZ');
-  a.rot = [e3.x, e3.y, e3.z].map(v => Math.max(-180, Math.min(180, Math.round(v / toRad / w * 10) / 10)));
+  a.rot = [e3.x, e3.y, e3.z].map(v => Math.round(v / toRad / w * 10) / 10);      // no limits: it may break the pose, that is allowed
   persist(); renderJoints(); apply();
 }
-function selectJoint(id) { selJoint = id; const j = JOINTS.find(x => x[0] === id); selAdj = j ? (findAdj(j[4], jmode) || null) : null; renderJoints(); placeBalls(); }
+function selectJoint(id) { selJoint = id; const j = JOINTS.find(x => x[0] === id); selAdj = j ? (findAdj(j[4], jmode) || null) : null; if (selAdj) document.getElementById('isoMode').checked = !!selAdj.iso; renderJoints(); placeBalls(); }
 function renderJoints() {
   const box = document.getElementById('jsel'); const list = document.getElementById('jlist'); const j = JOINTS.find(x => x[0] === selJoint);
   if (j) {
     const a = selAdj; box.style.display = '';
-    box.innerHTML = '<b>' + j[1] + '</b> <span style="color:var(--mut);font-size:12px">(bends ' + j[4] + ')</span>' + ['X', 'Y', 'Z'].map((ax, i) => '<div class="ax"><label>' + ax + '</label><input type="range" min="-180" max="180" step="1" value="' + (a ? a.rot[i] : 0) + '" data-ji="' + i + '"><input type="number" min="-180" max="180" step="1" value="' + (a ? a.rot[i] : 0) + '" data-jn="' + i + '"></div>').join('') + '<div style="color:var(--mut);font-size:12px;margin-top:4px">' + (a ? (a.center >= 0 ? 'only around frame ' + (a.center + 1) + ' (+-' + Math.round(a.width / 2) + ')' : 'whole animation') : 'drag the ball or move a slider to start') + '</div>';
+    box.innerHTML = '<b>' + j[1] + '</b> <span style="color:var(--mut);font-size:12px">(bends ' + j[4] + ')</span>' + ['X', 'Y', 'Z'].map((ax, i) => '<div class="ax"><label>' + ax + '</label><input type="range" min="-720" max="720" step="1" value="' + (a ? a.rot[i] : 0) + '" data-ji="' + i + '"><input type="number" step="1" value="' + (a ? a.rot[i] : 0) + '" data-jn="' + i + '"></div>').join('') + '<div style="color:var(--mut);font-size:12px;margin-top:4px">' + (a ? (a.center >= 0 ? 'only around frame ' + (a.center + 1) + ' (+-' + Math.round(a.width / 2) + ')' : 'whole animation') + (a.iso ? ' - this joint only' : '') : 'drag the ball or move a slider to start') + '</div>';
   } else box.style.display = 'none';
   const adj = edits[clip].adj || [];
   list.innerHTML = adj.length ? '<div style="color:var(--mut);font-size:12px;margin:8px 0 2px">Joint changes in this pose:</div>' + adj.map((a, i) => { const jj = JOINTS.find(x => x[4] === a.bone); return '<div class="row" style="margin:3px 0"><button data-sel="' + i + '" style="flex:1;text-align:left">' + (jj ? jj[1] : a.bone) + ' - ' + (a.center >= 0 ? 'frame ' + (a.center + 1) : 'whole') + ' (' + a.rot.map(v => Math.round(v)).join(', ') + ')</button><button data-del="' + i + '">x</button></div>'; }).join('') : '';
 }
 function setupJointUI() {
-  document.getElementById('jsel').addEventListener('input', e => { const t = e.target; const i = +(t.dataset.ji !== undefined ? t.dataset.ji : t.dataset.jn); if (Number.isNaN(i)) return; const j = JOINTS.find(x => x[0] === selJoint); if (!j) return; const a = selAdj || ensureAdj(j[4]); selAdj = a; a.rot[i] = Math.max(-180, Math.min(180, +t.value || 0)); persist(); renderJoints(); apply(); });
+  document.getElementById('jsel').addEventListener('input', e => { const t = e.target; const i = +(t.dataset.ji !== undefined ? t.dataset.ji : t.dataset.jn); if (Number.isNaN(i)) return; const j = JOINTS.find(x => x[0] === selJoint); if (!j) return; const a = selAdj || ensureAdj(j[4]); selAdj = a; a.rot[i] = +t.value || 0; persist(); renderJoints(); apply(); });
   document.getElementById('jlist').addEventListener('click', e => { const t = e.target; if (t.dataset.del != null) { adjList().splice(+t.dataset.del, 1); selAdj = null; persist(); renderJoints(); apply(); } else if (t.dataset.sel != null) { const a = adjList()[+t.dataset.sel]; if (a) { selAdj = a; const jj = JOINTS.find(x => x[4] === a.bone); selJoint = jj ? jj[0] : null; if (a.center >= 0) { frame = a.center; playing = false; document.getElementById('play').textContent = 'Play'; document.getElementById('play').classList.remove('on'); } renderJoints(); apply(); } } });
   const setMode = m => { jmode = m; document.getElementById('modeAll').classList.toggle('on', m === 'all'); document.getElementById('modeMoment').classList.toggle('on', m === 'moment'); if (selJoint) { const j = JOINTS.find(x => x[0] === selJoint); selAdj = findAdj(j[4], jmode) || null; } renderJoints(); };
   document.getElementById('modeAll').onclick = () => setMode('all'); document.getElementById('modeMoment').onclick = () => setMode('moment');
   const jw = document.getElementById('jwidth'); jw.oninput = () => { document.getElementById('jwl').textContent = jw.value + ' fr'; if (selAdj && selAdj.center >= 0) { selAdj.width = +jw.value; persist(); renderJoints(); apply(); } };
   document.getElementById('showJoints').onchange = () => placeBalls();
+  document.getElementById('isoMode').onchange = e => { if (selAdj) { selAdj.iso = e.target.checked; persist(); renderJoints(); apply(); } };
 }
 const tmp = new THREE.Vector3();
 function cam(kind) {
