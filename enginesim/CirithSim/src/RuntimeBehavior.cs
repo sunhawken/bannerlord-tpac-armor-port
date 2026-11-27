@@ -40,6 +40,20 @@ namespace CirithSim
             catch (Exception e) { SimSubModule.L("give sword err " + e.Message); }
         }
         bool SafeG() { try { bool d = TaleWorlds.InputSystem.Input.IsKeyDown(TaleWorlds.InputSystem.InputKey.G); bool r = d && !gWas; gWas = d; return r; } catch { return false; } }
+        public override void OnAgentRemoved(Agent affectedAgent, Agent affectorAgent, AgentState agentState, KillingBlow blow) { try { if (affectedAgent == Agent.Main) CirithVoice.Trigger(agentState == AgentState.Killed || agentState == AgentState.Unconscious ? "Death" : "Pain", "removed " + agentState); } catch { } }
+        public override void OnAgentHit(Agent affectedAgent, Agent affectorAgent, in MissionWeapon affectorWeapon, in Blow blow, in AttackCollisionData attackCollisionData) { try { if (affectedAgent == Agent.Main) CirithVoice.Trigger("Pain", "hit"); } catch { } }
+        string lastAct = "";
+        void VoiceFromActions(Agent m)
+        {
+            try
+            {
+                var act = m.GetCurrentActionType(1).ToString(); if (act == lastAct) return; var prev = lastAct; lastAct = act;
+                if (act.StartsWith("Attack", StringComparison.OrdinalIgnoreCase) && !prev.StartsWith("Attack", StringComparison.OrdinalIgnoreCase)) CirithVoice.Trigger(new Random().Next(5) == 0 ? "Yell" : "Grunt", "action " + act);
+                else if (act.IndexOf("Jump", StringComparison.OrdinalIgnoreCase) >= 0) CirithVoice.Trigger("Jump", "action " + act);
+                else if (act.IndexOf("Stun", StringComparison.OrdinalIgnoreCase) >= 0 || act.IndexOf("Bash", StringComparison.OrdinalIgnoreCase) >= 0) CirithVoice.Trigger("Stun", "action " + act);
+            }
+            catch { }
+        }
         public override void OnMissionTick(float dt)
         {
             life += dt; if (SimSubModule.Harness && Environment.GetEnvironmentVariable("CIRITH_RUNTIME") == "1" && Environment.GetEnvironmentVariable("CIRITH_LIVE") != "1" && life > (Environment.GetEnvironmentVariable("CIRITH_ATTACKTEST") == "1" ? 40f : Environment.GetEnvironmentVariable("CIRITH_VOICETEST") == "1" ? 25f : 20f)) { SimSubModule.L("runtime test: done (jiggle agents tracked: " + jig.Count + ", main=" + (Agent.Main != null) + ")"); TaleWorlds.Engine.Utilities.ExitProcess(0); }
@@ -73,6 +87,7 @@ namespace CirithSim
                 {   // test: ask the engine for each voice type; the Harmony prefix must swap them for the WAVs
                     int vi = (int)((life - 4f) / 1.2f); if (life > 4f && vi != lastVoice && vi < 12) { lastVoice = vi; var vt = new[] { SkinVoiceManager.VoiceType.Grunt, SkinVoiceManager.VoiceType.Jump, SkinVoiceManager.VoiceType.Yell, SkinVoiceManager.VoiceType.Pain, SkinVoiceManager.VoiceType.Death, SkinVoiceManager.VoiceType.Stun, SkinVoiceManager.VoiceType.Fear, SkinVoiceManager.VoiceType.Climb, SkinVoiceManager.VoiceType.Focus, SkinVoiceManager.VoiceType.Debacle, SkinVoiceManager.VoiceType.Victory, SkinVoiceManager.VoiceType.Drown }; try { m.MakeVoice(vt[vi], SkinVoiceManager.CombatVoiceNetworkPredictionType.NoPrediction); } catch (Exception ve) { SimSubModule.L("voice test err " + ve.Message); } }
                 }
+                if (m != null && m.IsActive()) VoiceFromActions(m);
                 foreach (var a in Mission.Current.Agents)
                 {
                     if (a != null && a.IsActive() && a.AgentVisuals != null && WeaponAnim.IsWielding(a) || (a != null && wanim.ContainsKey(a))) { if (!wanim.TryGetValue(a, out var wa)) { wa = new WeaponAnim(); wanim[a] = wa; SimSubModule.L("runtime: weapon controller attached to " + (a.Name ?? "agent")); } wa.Update(a, dt); }

@@ -58,6 +58,7 @@ namespace CirithSim
             try
             {
                 if (!Enabled || __instance == null) return true;
+                Calls++; { var k = (__instance == Agent.Main ? "main " : "other ") + voiceType.TypeID; if (seen.Add(k) && seen.Count < 80) SimSubModule.L("voice: engine asked MakeVoice " + k); }
                 if (__instance != Agent.Main) return true;      // player only: every other agent keeps its own voice
                 var t = voiceType.TypeID;
                 if (!files.TryGetValue(t, out var list) || list.Count == 0) { Blocked++; return false; }      // a voice type we have no line for: silence rather than the vanilla voice
@@ -65,6 +66,18 @@ namespace CirithSim
                 Play(__instance, t, list[rng.Next(list.Count)]); return false;
             }
             catch (Exception e) { SimSubModule.L("voice prefix err " + e.Message); return true; }
+        }
+        public static int Calls; static readonly HashSet<string> seen = new HashSet<string>();
+        // event-driven voices (hit / death / attack / jump) for the player, independent of whether the engine goes through MakeVoice for them
+        public static void Trigger(string type, string why)
+        {
+            try
+            {
+                var m = Agent.Main; if (!Enabled || m == null || !files.TryGetValue(type, out var list) || list.Count == 0) return;
+                float now = Now; if (lastPlay.TryGetValue(type, out var lp) && now - lp < (type == "Grunt" ? 0.35f : 0.8f)) return; lastPlay[type] = now;
+                SimSubModule.L("voice: trigger " + type + " (" + why + ")"); Play(m, type, list[rng.Next(list.Count)]);
+            }
+            catch (Exception e) { SimSubModule.L("voice trigger err " + e.Message); }
         }
         public static void Play(Agent a, string type, string file)
         {
