@@ -46,6 +46,7 @@
     <label class="chk"><input type="checkbox" id="showSword" checked> sword</label><label class="chk"><input type="checkbox" id="showBody" checked> body</label></div>
 
   <h2>Sword for <span id="curclip"></span></h2>
+  <p class="help"><b>Drag in the 3D view:</b> the <span style="color:#ff9a2e">orange ball</span> moves the sword anywhere you drag it, the <span style="color:#35d0ff">blue ball</span> (blade tip) turns the blade to point where you drag it. The sliders below fine-tune the same numbers.</p>
   <div id="bones"></div>
   <div class="row" style="margin-top:8px"><button id="resetClip">Reset this pose</button><button id="copyTo">Copy to all poses</button></div>
 
@@ -62,7 +63,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const BONES = ['pelvis','l_thigh','l_calf','l_foot','l_toe0','r_thigh','r_calf','r_foot','r_toe0','spine','spine1','spine2','neck','head','l_clavicle','l_upperarm_twist','l_upperarm_twist1','l_foretwist','l_foretwist1','l_hand','l_finger0','r_clavicle','r_upperarm_twist','r_upperarm_twist1','r_foretwist','r_foretwist1','r_hand','r_finger0'];
 // per pose: pos = sword offset in cm (in her left-hand's own axes), rot = sword rotation in degrees about the sword's own axes (X = across the guard, Y = thin side, Z = along the blade)
-const SW = [['pos','Move the sword (cm)',-40,40,0.5],['rot','Turn the sword (degrees)',-180,180,1]];
+const SW = [['pos','Move the sword (cm)',-60,60,0.5],['rot','Turn the sword (degrees)',-180,180,1]];
 const CLIPS = [['idle','Idle'],['walk','Walk'],['run','Run'],['sprint','Sprint']];
 const KEY = 'cirithSwordEdits.v2';
 
@@ -76,7 +77,7 @@ const grid = new THREE.GridHelper(6, 12, 0x3a4552, 0x252d37); scene.add(grid);
 function resize() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
-let swordBase = new THREE.Matrix4(); let clipsData, gripJ, bones = {}, rest = {}, body = [], sword = null, root = null;
+let ballMove, ballTip, drag = null; let swordBase = new THREE.Matrix4(); let clipsData, gripJ, bones = {}, rest = {}, body = [], sword = null, root = null;
 let clip = 'idle', frame = 0, playing = true, speed = 0.5, acc = 0;
 let edits = {}; try { edits = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
 const zero = () => ({}); for (const [c] of CLIPS) edits[c] = edits[c] || {};
@@ -96,6 +97,8 @@ async function init() {
   sword = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, metalness: 0.4, roughness: 0.5 }));
   const X = new THREE.Vector3(...gripJ.X).normalize(), Y = new THREE.Vector3(...gripJ.Y).normalize(), Z = new THREE.Vector3(...gripJ.Z).normalize();
   sword.matrixAutoUpdate = false; swordBase.makeBasis(X, Y, Z); sword.matrix.copy(swordBase); bones['l_hand'].add(sword);
+  const mk = (color, r) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.92 })); m.renderOrder = 999; scene.add(m); return m; };
+  ballMove = mk(0xff9a2e, 0.035); ballTip = mk(0x35d0ff, 0.028); setupDrag();
   buildUI(); setClip('idle'); animate();
 }
 
@@ -156,7 +159,39 @@ function apply() {
   { const ed = edits[clip]; const pos = ed.pos || [0, 0, 0], rot = ed.rot || [0, 0, 0]; sword.matrix.copy(swordBase); eu.set(rot[0] * Math.PI / 180, rot[1] * Math.PI / 180, rot[2] * Math.PI / 180, 'XYZ'); sword.matrix.multiply(new THREE.Matrix4().makeRotationFromEuler(eu)); sword.matrix.setPosition(pos[0] / 100, pos[1] / 100, pos[2] / 100); sword.matrixWorldNeedsUpdate = true; }
   const p = bones['pelvis']; p.position.copy(rest['pelvis'].p); p.position.z += c.dz[f];
   document.getElementById('frame').value = f; document.getElementById('fl').textContent = (f + 1) + ' / ' + c.n;
-  root.updateMatrixWorld(true);
+  root.updateMatrixWorld(true); placeBalls();
+}
+function placeBalls() {
+  if (!ballMove) return; sword.updateWorldMatrix(true, false);
+  ballMove.position.setFromMatrixPosition(sword.matrixWorld); ballTip.position.set(0, 0, 0.9).applyMatrix4(sword.matrixWorld);
+}
+const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(), hit = new THREE.Vector3(), vTmp = new THREE.Vector3();
+function setupDrag() {
+  const el = renderer.domElement;
+  const setNdc = e => { const r = el.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); raycaster.setFromCamera(ndc, camera); };
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return; setNdc(e); const h = raycaster.intersectObjects([ballMove, ballTip], false)[0]; if (!h) return;
+    drag = h.object; controls.enabled = false; el.setPointerCapture(e.pointerId); playing = false; const pb = document.getElementById('play'); pb.textContent = 'Play'; pb.classList.remove('on');
+    camera.getWorldDirection(vTmp); plane.setFromNormalAndCoplanarPoint(vTmp, drag.position); e.preventDefault();
+  });
+  el.addEventListener('pointermove', e => {
+    if (!drag) return; setNdc(e); if (!raycaster.ray.intersectPlane(plane, hit)) return;
+    const hand = bones['l_hand']; hand.updateWorldMatrix(true, false); const local = hand.worldToLocal(hit.clone());          // the dragged point in her left-hand bone frame (metres)
+    const ed = edits[clip];
+    if (drag === ballMove) {
+      const p = [local.x * 100, local.y * 100, local.z * 100].map(v => Math.max(-60, Math.min(60, Math.round(v * 2) / 2))); ed.pos = p;
+    } else {
+      const org = new THREE.Vector3().setFromMatrixPosition(sword.matrix); const dir = local.clone().sub(org); if (dir.length() < 0.02) return; dir.normalize();
+      const cur = new THREE.Vector3(0, 0, 1).transformDirection(sword.matrix);                                                // current blade direction in the hand frame
+      const q = new THREE.Quaternion().setFromUnitVectors(cur, dir); const rot = new THREE.Matrix4().extractRotation(sword.matrix); const rotNew = new THREE.Matrix4().makeRotationFromQuaternion(q).multiply(rot);
+      const edit = swordBase.clone().extractRotation(swordBase).transpose().multiply(rotNew);                                   // R_edit = B^T * R_new   (R = B * R_edit)
+      const eu2 = new THREE.Euler().setFromRotationMatrix(edit, 'XYZ'); ed.rot = [eu2.x, eu2.y, eu2.z].map(v => Math.max(-180, Math.min(180, Math.round(v * 180 / Math.PI))));
+    }
+    syncUI(); persist(); apply();
+  });
+  const end = e => { if (!drag) return; drag = null; controls.enabled = true; try { el.releasePointerCapture(e.pointerId); } catch (er) {} };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  el.addEventListener('pointermove', e => { if (drag) return; setNdc(e); el.style.cursor = raycaster.intersectObjects([ballMove, ballTip], false).length ? 'grab' : ''; });
 }
 const tmp = new THREE.Vector3();
 function cam(kind) {

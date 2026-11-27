@@ -2,7 +2,7 @@ CIRITH SWORD GRIP EDITOR
 ========================
 1. Double-click  "Start Grip Editor.bat"  (needs Python; it opens http://127.0.0.1:8790/ - this is separate from your gallery).
 2. Pick a pose (Idle / Walk / Run / Sprint). Her body plays her original animation untouched.
-3. Move / turn the SWORD with the sliders until it sits where you want it in her left hand:
+3. Drag the orange ball (moves the sword) or the blue ball at the blade tip (turns the blade) in the 3D view, or use the sliders, to place the SWORD until it sits where you want it in her left hand:
      Move the sword (cm)    - along her left-hand bone axes
      Turn the sword (deg)   - around the sword's own axes (X across the guard, Y thin side, Z along the blade)
    "Close on hand" shows a close-up; "Copy to all poses" copies the numbers of the current pose to the others.
