@@ -29,7 +29,8 @@ for clip in ('idle', 'walk', 'run', 'sprint'):
         out.append(f"{clip} {p[0]/100:.5f} {p[1]/100:.5f} {p[2]/100:.5f} {r[0]:.3f} {r[1]:.3f} {r[2]:.3f}"); v3['clips'][clip] = dict(pos=[round(x, 2) for x in p], rot=[round(x, 1) for x in r])
     if adj: v3['clips'].setdefault(clip, {})['adj'] = adj
 dst = '../enginesim/CirithSim/module/ModuleData/cirith_grip_edits.txt'
-open(dst, 'w').write('\n'.join(out) + ('\n' if out else '')); json.dump(v3, open('../grip_editor/data/start_edits.json', 'w'), indent=1)
+open(dst, 'w').write(chr(10).join(out) + (chr(10) if out else ''))
+if ver == 2: json.dump(v3, open('../grip_editor/data/start_edits.json', 'w'), indent=1)      # the editor start point = the carried version-2 edits; a saved version-3 file never overwrites it
 print('read', src, '(version', ver, ') ->', dst, ':', len(out), 'pose(s)'); print(open(dst).read())
 # joint adjustments are baked into the clips: write the current file where retarget_anim.py reads it and regenerate the four clips
 json.dump(v3, open('../grip_editor/grip_edits.json', 'w'), indent=1)
