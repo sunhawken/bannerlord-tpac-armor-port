@@ -445,6 +445,50 @@ class P
             var cm = me0.ClothingMaterial; Console.WriteLine($" clothingMaterial name='{cm.Name}' b={cm.BendingStiffness} sh={cm.ShearingStiffness} st={cm.StretchingStiffness} an={cm.AnchorStiffness} damp={cm.Damping} g={cm.Gravity} inertia={cm.LinearInertia} wind={cm.Wind} drag={cm.AirDragMultiplier}");
             return;
         }
+        if (a[1] == "clodumpall")
+        {
+            // dump the cook blob of every clo_* / standalone cloth metamesh: <outdir>\<name>.bin  plus a tsv of header words
+            var BFa = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance; var gk = Guid.Parse("b97e0f10-df49-4666-8f1d-ada6630d4b4e"); Directory.CreateDirectory(a[2]); var sw = new StreamWriter(Path.Combine(a[2], "index.tsv"));
+            foreach (var kv in MM)
+                foreach (var sg in kv.Value.TypelessDataSegments.Where(s => s.TypeGuid == gk))
+                {
+                    var fileA = (FileInfo)typeof(AbstractExternalLoader).GetField("_file", BFa).GetValue(sg); byte[] raw;
+                    using (var brA = new BinaryReader(fileA.OpenRead())) raw = (byte[])sg.GetType().GetMethod("GetRawData", BFa).Invoke(sg, new object[] { brA });
+                    var me = kv.Value.Meshes.FirstOrDefault(m => m.Guid == sg.OwnerGuid) ?? kv.Value.Meshes.First();
+                    File.WriteAllBytes(Path.Combine(a[2], kv.Key + ".bin"), raw); sw.WriteLine($"{kv.Key}	{raw.Length}	{me.VertexCount}	{me.FaceCount}");
+                }
+            sw.Close(); return;
+        }
+        if (a[1] == "clothclone")
+        {
+            // clothclone <out.tpac> <newName> : clone vanilla vlandian_woman_dress (+ its clo_ proxy, cook blob and map blob) under new names, optionally mutating the blobs
+            // env CK_PATCH="off:hex,off:hex" patches bytes of the cook blob, MP_PATCH the same for the map blob (hex = 1..4 bytes little-endian written as hex string like 0badf00d)
+            var BFc = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance; var gCook = Guid.Parse("b97e0f10-df49-4666-8f1d-ada6630d4b4e"); var gMap = Guid.Parse("af41613e-bd4d-46ec-8284-debb56c042dc");
+            var par = MM["vlandian_woman_dress"]; var clo = M.GetAsset(par.ClothMetamesh) as Metamesh; var pk = new AssetPackage(Guid.NewGuid());
+            var mp = new Dictionary<Guid, Guid>(); foreach (var m0 in new[] { par, clo }) { mp[m0.Guid] = Guid.NewGuid(); foreach (var mx in m0.Meshes) mp[mx.Guid] = Guid.NewGuid(); }
+            Func<string, byte[], byte[]> patch = (envName, raw) => { var pv = Environment.GetEnvironmentVariable(envName); if (string.IsNullOrEmpty(pv)) return raw; var r = (byte[])raw.Clone(); foreach (var item in pv.Split(',')) { var kvp = item.Split(':'); int off = int.Parse(kvp[0]); var hb = Convert.FromHexString(kvp[1]); Array.Copy(hb, 0, r, off, hb.Length); } return r; };
+            foreach (var m0 in new[] { par, clo })
+            {
+                var oldGuid = m0.Guid; var segs = m0.TypelessDataSegments.ToList();
+                foreach (var sg in segs) if (mp.ContainsKey(sg.OwnerGuid)) sg.OwnerGuid = mp[sg.OwnerGuid];
+                for (int i = 0; i < m0.TypelessDataSegments.Count; i++)
+                {
+                    var sg = m0.TypelessDataSegments[i]; var envn = sg.TypeGuid == gCook ? "CK_PATCH" : sg.TypeGuid == gMap ? "MP_PATCH" : null; if (envn == null || string.IsNullOrEmpty(Environment.GetEnvironmentVariable(envn))) continue;
+                    var fileC = (FileInfo)typeof(AbstractExternalLoader).GetField("_file", BFc).GetValue(sg); byte[] raw;
+                    using (var brC = new BinaryReader(fileC.OpenRead())) raw = (byte[])sg.GetType().GetMethod("GetRawData", BFc).Invoke(sg, new object[] { brC });
+                    raw = patch(envn, raw); var ed = new ExternalData(sg.TypeGuid); ed.ReadData(new BinaryReader(new MemoryStream(raw)), new Dictionary<object, object>(), raw.Length);
+                    var nl = new ExternalLoader<ExternalData>(ed); nl.OwnerGuid = sg.OwnerGuid;
+                    var fU = typeof(AbstractExternalLoader).GetField("_unknownUlong", BFc); var fN = typeof(AbstractExternalLoader).GetField("_unknownUint", BFc); fU.SetValue(nl, fU.GetValue(sg)); fN.SetValue(nl, fN.GetValue(sg));
+                    m0.TypelessDataSegments[i] = nl; Console.WriteLine($"patched {envn} on {m0.Name} ({raw.Length} bytes)");
+                }
+                m0.Guid = mp[oldGuid]; foreach (var mx in m0.Meshes) mx.Guid = mp[mx.Guid];
+            }
+            par.Name = a[3]; clo.Name = "clo_" + a[3]; par.ClothMetamesh = clo.Guid;
+            foreach (var d0 in par.UnknownDependences) { foreach (var kv in mp) { if (d0.UnknownGuid1 == kv.Key) d0.UnknownGuid1 = kv.Value; } }
+            foreach (var mx in par.Meshes.Concat(clo.Meshes)) { }
+            pk.Items.Add(par); pk.Items.Add(clo); pk.Save(a[2], 2); Console.WriteLine($"wrote {a[2]}: {par.Name} + {clo.Name}");
+            return;
+        }
         if (a[1] == "packinfo")
         {
             var pk2 = new AssetPackage(a[2], true, true);

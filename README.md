@@ -131,7 +131,10 @@ Your mesh must show the same lag; mine (flag + params + alpha only) stayed perfe
 ## 5. Not solved: in-game cloth / jiggle
 The engine does recognise the mesh flag + per-mesh `ClothingMaterial` + vertex-alpha weights (`HasClothData() == True` for the packed body/head meshes), but whether it *simulates* without the cooked data is unconfirmed, and vanilla cloth armor also has more: Vanilla cloth armor also has
 (a) a separate simplified `clo_<name>` metamesh whose mesh carries an extra compiled data segment (type `b97e0f10-...`, ~80 KB for a dress) and
-(b) a `ClothMappingData` segment (`af41613e-...`, ~22 bytes per render vertex) on the render mesh plus a dependency link. Findings so far on the cook blob (`b97e0f10`): header `[magic][edgeCount][vertCount][constraintSets][?][indexCount]`, then count-prefixed arrays (AABB, edge rest lengths, u16-pair edges,
+(b) a `ClothMappingData` segment (`af41613e-...`, ~22 bytes per render vertex) on the render mesh plus a dependency link. **Update:** cloning a vanilla cloth dress (`tool clothclone`) with its blobs works in the engine, and zeroing the first header word makes the cloth explode, so the engine DOES read the blob and
+simulate from it - the first word is a float physics parameter (~1e-6..1e-5, correlates with mesh extents), not a checksum. Remaining blob arrays (per-vertex packed data, vec4 per vertex, constraint
+batch table, vertex permutation, bending quads) still need decoding before a blob can be generated for a new mesh.
+Findings so far on the cook blob (`b97e0f10`): header `[magic][edgeCount][vertCount][constraintSets][?][indexCount]`, then count-prefixed arrays (AABB, edge rest lengths, u16-pair edges,
 per-colour constraint batches, vertex permutation, bending quads...). The magic differs per mesh (looks like a float/hash) and is the blocker. A standalone cloth mesh (`campaign_flag`) needs only the cook blob, no mapping. Both are compiled binary formats that this
 project has not decoded yet. PRs / findings welcome.
 
