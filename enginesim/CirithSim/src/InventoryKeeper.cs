@@ -8,11 +8,11 @@ using TaleWorlds.ObjectSystem;
 
 namespace CirithSim
 {
-    // Campaign only: keeps at least one copy of every Cirith armor piece in the player's party inventory at all times.
+    // Campaign only: keeps at least one copy of every Cirith armor piece and her sword in the player's party inventory at all times.
     // Whenever the inventory could have changed (session start, game load, inventory screen closed, item sold, every game hour) any missing piece is added back.
     public class CirithInventoryBehavior : CampaignBehaviorBase
     {
-        public static readonly string[] Pieces = { "cirith_head", "cirith_body", "cirith_legs", "cirith_hands" };
+        public static readonly string[] Pieces = { "cirith_head", "cirith_body", "cirith_legs", "cirith_hands", "cirith_sword" };      // the four armor pieces AND her blade
 
         public override void RegisterEvents()
         {
@@ -20,7 +20,12 @@ namespace CirithSim
             CampaignEvents.OnGameLoadedEvent.AddNonSerializedListener(this, _ => Ensure("game loaded"));
             CampaignEvents.PlayerInventoryExchangeEvent.AddNonSerializedListener(this, (a, b, c) => Ensure("inventory closed"));
             CampaignEvents.HourlyTickEvent.AddNonSerializedListener(this, () => Ensure("hourly"));
+            CampaignEvents.DailyTickEvent.AddNonSerializedListener(this, () => Ensure("daily"));
+            // anything can remove an item between those events (selling, a lost battle, a stolen stash, an equip swap): a cheap check about once a second, but never while the inventory screen is open
+            CampaignEvents.TickEvent.AddNonSerializedListener(this, dt => { acc += dt; if (acc < 1f) return; acc = 0; if (!InventoryScreenOpen()) Ensure("watch"); });
         }
+        float acc;
+        static bool InventoryScreenOpen() { try { var t = TaleWorlds.ScreenSystem.ScreenManager.TopScreen; return t != null && t.GetType().Name.IndexOf("Inventory", StringComparison.OrdinalIgnoreCase) >= 0; } catch { return false; } }
         public override void SyncData(IDataStore dataStore) { }
 
         public static void Ensure(string why) { try { var p = MobileParty.MainParty; if (p != null) EnsureRoster(p.ItemRoster, why); } catch (Exception e) { SimSubModule.L("inventory keeper error: " + e.Message); } }
