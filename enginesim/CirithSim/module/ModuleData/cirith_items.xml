@@ -57,7 +57,7 @@
   <!-- the item itself uses an invisible 1 mm mesh (stats, hitbox and physics body stay); the visible sword is the mesh "cirith_sword" that the CirithSim DLL places on the left hand every tick. Her own KUF weapon (E_DS_NZ_R). In her original files it is always attached to her R hand = Bannerlord's LEFT hand, so the engine attaches it to the left-hand bone (ForceAttachOffHandPrimaryItemBone) -->
   <Item id="cirith_sword" name="Cirith's Blade" mesh="cirith_sword_hidden" culture="Culture.vlandia" weight="1.1" difficulty="0" appearance="1" value="1500" Type="OneHandedWeapon" body_name="bo_sword_one_handed" item_holsters="sword_left_hip">
     <ItemComponent>
-      <Weapon weapon_class="OneHandedSword" weapon_balance="95" thrust_speed="95" speed_rating="96" missile_speed="0" weapon_length="90" thrust_damage="24" thrust_damage_type="Pierce" swing_damage="32" swing_damage_type="Cut" item_usage="onehanded_block_shield_swing_thrust" physics_material="metal_weapon">
+      <Weapon weapon_class="OneHandedSword" weapon_balance="95" thrust_speed="95" speed_rating="96" missile_speed="0" weapon_length="105" thrust_damage="24" thrust_damage_type="Pierce" swing_damage="32" swing_damage_type="Cut" item_usage="onehanded_block_shield_swing_thrust" physics_material="metal_weapon">
         <WeaponFlags MeleeWeapon="true" />
       </Weapon>
     </ItemComponent>

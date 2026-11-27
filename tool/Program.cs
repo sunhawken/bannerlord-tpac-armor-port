@@ -90,6 +90,23 @@ class P
             }
             return;
         }
+        if (a[1] == "physdump")
+        {   // physdump <name>... : extents of the physics description of PhysicsShape assets (hit volumes of weapons)
+            foreach (var name in a.Skip(2))
+            {
+                foreach (var ps in M.LoadedAssets.OfType<PhysicsShape>().Where(x => x.Name == name))
+                {
+                    foreach (var seg in ps.TypelessDataSegments)
+                    {
+                        var dd = (seg as ExternalLoader<PhysicsDescriptionData>)?.Data; if (dd == null) continue;
+                        Console.WriteLine($"{name}: capsules={dd.Capsules.Count} spheres={dd.Spheres.Count} manifolds={dd.Manifolds.Count}");
+                        foreach (var c in dd.Capsules) Console.WriteLine($"  capsule r={c.Radius:F3} center=({c.Center.X:F3},{c.Center.Y:F3},{c.Center.Z:F3}) axis=({c.Axis.X:F3},{c.Axis.Y:F3},{c.Axis.Z:F3})");
+                        foreach (var m in dd.Manifolds) { if (m.Vertices.Length == 0) continue; Console.WriteLine($"  manifold verts={m.Vertices.Length} min=({m.Vertices.Min(v => v.X):F3},{m.Vertices.Min(v => v.Y):F3},{m.Vertices.Min(v => v.Z):F3}) max=({m.Vertices.Max(v => v.X):F3},{m.Vertices.Max(v => v.Y):F3},{m.Vertices.Max(v => v.Z):F3})"); }
+                    }
+                }
+            }
+            return;
+        }
         if (a[1] == "animdump")
         {
             // animdump <out.json> <anim name>... : local bone rotations (3x3 row-major, glTF/bone-local convention) resampled to 60 fps; bone names in skeleton order

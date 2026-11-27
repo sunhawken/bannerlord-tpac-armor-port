@@ -255,6 +255,126 @@
      "iso": false
     }
    ]
+  },
+  "atk_ready_slashright_1h": {
+   "pos": [
+    -7,
+    2.5,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
+  },
+  "atk_release_slashright_1h": {
+   "pos": [
+    -7,
+    1.5,
+    1.5
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
+  },
+  "atk_ready_slashleft_1h": {
+   "pos": [
+    -3.5,
+    1,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
+  },
+  "atk_release_slashleft_1h": {
+   "pos": [
+    -6.5,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
+  },
+  "atk_ready_overswing_1h": {
+   "pos": [
+    -7,
+    1,
+    -1
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
+  },
+  "atk_release_overswing_1h": {
+   "pos": [
+    -6.5,
+    2,
+    -2
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
+  },
+  "atk_defend_up_1h_parry_light": {
+   "pos": [
+    -6.5,
+    1,
+    -1.5
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
+  },
+  "atk_defend_right_1h_parry_light": {
+   "pos": [
+    -4.5,
+    1,
+    0
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
+  },
+  "atk_defend_left_1h_parry_light": {
+   "pos": [
+    -4,
+    2,
+    -0.5
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
+  },
+  "atk_defend_forward_1h_parry_light": {
+   "pos": [
+    -6,
+    0.5,
+    2
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ]
   }
  }
 }
