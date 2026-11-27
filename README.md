@@ -3,6 +3,8 @@
 Double-click **Launch Gallery.bat** (needs Python), or `python gallery\serve.py 8766` and open http://127.0.0.1:8766/ .
 Models: `gallery/models/*.glb` (skinned + animated, 28-bone `human_skeleton`).
 
+**Full build story of the Cirith mod (rig, atlas, packing, engine sim, DLL, animations, sword, editor): [docs/HOW_IT_WAS_BUILT.md](docs/HOW_IT_WAS_BUILT.md).**
+
 ## What is in it (42 models)
 - `female_nude` - base female body + head/hands/feet/hair. **The game's only body texture has underwear painted in.**
 - `female_nude_bare` - same, with the underwear paint removed from the 512px texture (derived, `src/texcache/body_female_a_d_bare.png`).
@@ -48,7 +50,8 @@ Merge all armor parts -> reshape onto her (landmark RBF + per-bone-region snap, 
 Her mesh keeps its ORIGINAL SHAPE, UVs, normals and atlas (nothing is reshaped; the sim reports shape_change_pct = 0). Only: a uniform
 scale + shift into Bannerlord space, and the RIG - her own skin weights remapped bone by bone onto Bannerlord's 28-bone human_skeleton
 (twist bones share the limb weight), then smoothed so transitions do not tear. Split into slots head / hands / legs / body (+ trim).
-- `python transplantigsim.py [--no-render]` (~1-5 s) -> `out_rig/cirith_armor_rigged.glb` (+ `_on_body`), `rig_metrics.json`, `rig_sheet.png`.
+- `python transplant
+igsim.py [--no-render]` (~1-5 s) -> `out_rig/cirith_armor_rigged.glb` (+ `_on_body`), `rig_metrics.json`, `rig_sheet.png`.
 - Known: her arms are ~19 deg off Bannerlord's bind-pose arms (shape is kept as asked); some elbow/shoulder triangles stretch in motion.
 - Not written: Bannerlord item/slot XML. `looksim.py` (Bannerlord armor that looks like her) is the other direction and is kept separately.
 

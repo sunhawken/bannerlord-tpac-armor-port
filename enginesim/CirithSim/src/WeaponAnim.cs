@@ -91,6 +91,21 @@ namespace CirithSim
 
         public static bool Mirrored = true; readonly Dictionary<string, MatrixFrame> editsR = new Dictionary<string, MatrixFrame>();
         bool engineHold;
+        // jump / fall: the engine's own animation must win while she is in the air (action type on either channel, or a vertical speed the ground never produces)
+        static bool JumpLike(Agent a, float vz)
+        {
+            try { foreach (int ch in new[] { 0, 1 }) { var n = a.GetCurrentActionType(ch).ToString(); if (n.IndexOf("Jump", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Fall", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("Land", StringComparison.OrdinalIgnoreCase) >= 0) return true; } } catch { }
+            return Math.Abs(vz) > 1.2f;
+        }
+        float lastZ, airUntil; bool haveZ;
+        bool EngineBusy(Agent a, float dt)
+        {
+            float z = a.Position.z; float vz = haveZ && dt > 0.0001f && dt < 0.1f ? (z - lastZ) / dt : 0f; lastZ = z; haveZ = true;
+            if (JumpLike(a, vz)) airUntil = life + 0.35f;      // keep yielding a moment through the landing
+            life += dt; if (life < airUntil) return true;
+            return EngineBusy(a);
+        }
+        float life;
         static bool EngineBusy(Agent a)
         {
             try { switch (a.GetCurrentActionType(1)) { case Agent.ActionCodeType.Other: case Agent.ActionCodeType.Idle: case Agent.ActionCodeType.Guard: return false; default: return true; } }
@@ -114,7 +129,7 @@ namespace CirithSim
             bool forward = fwd > 0.6f * Math.Max(speed, 0.001f) && speed > 0.2f;
             // ---- state machine (the engine's combat actions always win: no override while attacking / blocking)
             State want;
-            engineHold = EngineBusy(me) || Environment.GetEnvironmentVariable("CIRITH_FORCEHOLD") == "1";
+            engineHold = EngineBusy(me, dt) || Environment.GetEnvironmentVariable("CIRITH_FORCEHOLD") == "1";
             if (engineHold) want = State.None;
             else if (sprintHeld && forward && speed > 1.2f) want = State.Sprint;
             else if (speed < 0.25f) want = State.Idle;
