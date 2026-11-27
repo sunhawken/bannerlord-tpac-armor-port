@@ -59,6 +59,27 @@ hp = {n_: dd_ for n_, _, dd_ in g.primitives()}['cirith_head_armor']
 sets = [(uv.astype(float), f), (hp['uv'].astype(float), hp['idx'])]
 cut_pend = _outside_black((150, 10, 215, 90), sets, 'pendant')
 cut_ear = _outside_black((296, 98, 362, 162), sets, 'hoop earrings')
+def _outside_black_tris(tri_sets, name, halo=2, edge=3):
+    """same flood cut, but for explicit triangle sets (hips / collar). The transparent set keeps a `halo`-px opaque black rim around every non-black texel (gold, teal gems, beads),
+    so thin details are never eroded by DXT5 alpha blocks / mip filtering."""
+    m = np.zeros((H, W), bool)
+    for uvs_, f_ in tri_sets:
+        if len(f_): m |= _raster(f_, uvs_, H, W)
+    m = ndi.binary_dilation(m, iterations=1)
+    lum_ = im[..., :3].astype(int).sum(2) / 3.0; sat_ = im[..., :3].max(2).astype(int) - im[..., :3].min(2).astype(int)
+    dk = m & (lum_ < 24) & (sat_ < 30)      # true black only: the dark-grey SKIN of the same islands (lum ~40+) must stay
+    seeds = dk & ~ndi.binary_erosion(m, iterations=edge)
+    fl = ndi.binary_propagation(seeds, mask=dk)
+    keep = ndi.binary_dilation(m & ~dk, iterations=halo)      # opaque rim around gold/gems/beads
+    fl &= ~keep
+    print(name, 'mask px', int(m.sum()), 'transparent', int(fl.sum())); return fl
+_cz = p[f][:, :, 2].mean(1)
+hip_sel = f[(_cz > 0.78) & (_cz < 1.20)]
+_hz = hp['pos'][hp['idx']][:, :, 2].mean(1); _hx = np.abs(hp['pos'][hp['idx']][:, :, 0]).mean(1)
+col_sel = hp['idx'][(_hz > 1.40) & (_hz < 1.56) & (_hx < 0.30)]
+cut_hip = _outside_black_tris([(uv.astype(float), hip_sel)], 'hips')
+cut_col = _outside_black_tris([(hp['uv'].astype(float), col_sel)], 'collar')
+cut_pend = cut_pend | cut_hip | cut_col
 clear = clear | cut_pend | cut_ear
 im[clear, 3] = 0
 # colour of the transparent texels = nearest opaque texel (no dark halo when filtered)
