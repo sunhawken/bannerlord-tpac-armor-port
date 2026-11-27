@@ -144,6 +144,14 @@ at runtime (`Agent.UpdateSpawnEquipmentAndRefreshVisuals`), slides/stops her per
 **Cook blob layout** (`enginesim/cookparse.py` consumes vanilla blobs exactly): `header[6] | aabb[8] | E rest lengths | E edges(u16 pairs) | T constraint-set rows (8 words) | batches2 | A(2V words) | B(V) | C perm(V) | D index list | E free weights(V) | F(V floats) | G(V words, count in bytes) | H(4V floats = per-vertex weights summing to 1) | I(V int16 pairs)`.
 Zeroing results on a simulating dress: **A, H, I essential** (cloth explodes into a rigid sheet without them), D partly, **B, C, F, G optional**; E zeroed = pinned (looks normal, no sway). A/H/I semantics still unknown.
 
+### How the official editor builds cloth (from the docs; Modding Kit = Steam tool app 1393600, ~20 GB)
+The Bannerlord editor has a **Cloth Editor** (toolbar). Per the official docs saving generates **.tcc** (cooked simulation data: constraint indices/lengths = our `b97e0f10` cook blob) and **.tcm**
+(mapping render mesh -> sim mesh = our `af41613e` map blob). *Direct* simulation simulates the render mesh itself (flags, simple grids, modest vertex counts); *mapped* simulation uses a lower-poly
+simulation mesh the render mesh follows. Rules: vertex alpha = how far a vertex may move from its skinned position (0 = pinned/skinned), scaled by the *max distance multiplier*; in mapped mode alpha > 0 on the
+render mesh means "map to the sim mesh". Cloth materials (bending/stretching/shearing/anchor stiffness, damping, inertia, drag, wind, gravity, iteration frequency, precise simulation, dummy collision particles)
+live in Edit > Edit material templates. Collision capsules come from "cloth bodies". You must press *Save mesh settings*. No documented command-line cook.
+Sources: moddocs.bannerlord.com/editor/resource-editors/cloth_simulation, docs.bannerlordmodding.lt/3d/cloth_physics, /3d/collision_body.
+
 ## 6. Layout
 - `tool/` - .NET 8 console: `armorpack`, `rawstream`, `pkgdiff`, `matinfo`, `seginfo`, `vsinfo`, `blobdump`, ... (expects the game's `Modules/Native/AssetPackages` as arg 0)
 - `patches/` - TpacTool writer fixes (apply to a clone of szszss/TpacTool; the tool project references it as `TpacTool.Lib`)
