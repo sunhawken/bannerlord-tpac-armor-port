@@ -44,7 +44,7 @@ namespace CirithSim
         float phase, weight, xfade = 1f; float[] prevPose; bool havePrev; float[] lastPose = new float[28 * 9]; bool lastPoseValid;
         Vec3 lastPos, vel; bool havePos; bool boosted; float baseMax = -1, baseCombat = -1;
         public bool SprintHeldOverride, UseOverrides;   // used by the headless test only
-        int calibLog = 0, calibTick;
+        int calibLog = 0, calibTick, dbgN;
         // ---- our own sword mesh, attached to the left-hand BONE of the skeleton with the exact grip frame computed from her original files (the engine's own weapon attachment ignores bone overrides, so it is hidden while we drive the arm)
         MatrixFrame grip = MatrixFrame.Identity; bool gripLoaded; bool engineWeaponHidden;
 
@@ -223,6 +223,7 @@ namespace CirithSim
         }
         // remove the sword entity (agent died / mission ends) - never leave a floating sword behind
         public void Dispose() { if (swordEnt != null) { try { swordEnt.Remove(0); } catch { } swordEnt = null; SimSubModule.L("weapon proxy removed (dispose)"); } }
+        static string V(Vec3 v) { return v.x.ToString("0.0000") + "," + v.y.ToString("0.0000") + "," + v.z.ToString("0.0000"); }
         void UpdateProxy(Agent me)
         {
             if (swordEnt == null) return;
@@ -230,6 +231,11 @@ namespace CirithSim
             {
                 var gf = me.AgentVisuals.GetEntity().GetGlobalFrame(); var hf = me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame(19);
                 var world = gf.TransformToParent(hf.TransformToParent(EditedGrip())); swordEnt.SetGlobalFrame(ref world, false);
+                if (Environment.GetEnvironmentVariable("CIRITH_GRIPLOG") == "1" && dbgN++ % 40 == 0 && clip != null)
+                {
+                    var back = swordEnt.GetGlobalFrame(); var inv = gf.TransformToLocal(back); var gl = EditedGrip();
+                    SimSubModule.L("GRIPLOG state=" + Current + " clipFrame=" + (((int)phase) % clip.N) + " weight=" + weight.ToString("0.00") + " | gfScale=" + gf.rotation.s.Length.ToString("0.000") + " | hand(model) origin=" + V(hf.origin) + " s=" + V(hf.rotation.s) + " f=" + V(hf.rotation.f) + " u=" + V(hf.rotation.u) + " | gripT=" + V(gl.origin) + " | swordReadBack(model) origin=" + V(inv.origin) + " Z=" + V(inv.rotation.u) + " X=" + V(inv.rotation.s) + " | pelvis(model)=" + V(me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame(0).origin));
+                }
             }
             catch (Exception e) { SimSubModule.L("proxy update err " + e.Message); }
         }

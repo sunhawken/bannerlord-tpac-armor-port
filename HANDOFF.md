@@ -101,3 +101,6 @@ Game is now at T:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord (T: 
 - Not done / limits: engine animation assets cannot be added by a module (clips are bone overrides); combat uses the engine's own animations; enemy NPC armor appears black in the sim (pre-existing); the sprint key uses Input.IsKeyDown (not exercised with a real keyboard, the test drives it through an override).
 
 ## FINAL STATE 2026-11-27: see docs\MODIFIED_FILES.md and docs\TEST_RESULTS.md. Open item: the user's grip_edits.json (sword placement per pose) -> transplant\apply_grip_edits.py -> rebuild/run.
+
+## FIX 2026-11-27: the grip editor used the GALLERY model, not the game's
+The editor showed cirith_armor_rigged.glb (original hands/arms); the game uses the packed mesh (arms angled 19.2 deg about the shoulder, hands slid ~5 cm, black wrist sleeves, trims). The gallery hand sits ~16 cm above the hand bone -> the user's offsets made the sword float beside the hand in the game. Now: grip_editor loads data/game_mesh.json + game_atlas.png (transplant/export_game_mesh.py, exact slots.bin geometry) on the glb skeleton, and emulates the spare bones (breast/glute/ponytail follow spine2/pelvis/head). Version-2 edit files are carried onto the game mesh by apply_grip_edits.py (transform in compute_hand_transform.py); editor files are now version 3.

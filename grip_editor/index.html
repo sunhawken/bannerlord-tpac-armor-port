@@ -28,7 +28,7 @@
 <div id="view"><div id="hud">drag = orbit · wheel = zoom · right-drag = pan</div></div>
 <div id="side">
   <h1>Cirith sword grip editor</h1>
-  <p class="help">Her body plays her original animation untouched. For each pose, move and turn the <b>sword</b> in her left hand until it sits where you want it. When you are happy, press <b>Save edits</b> and send me the downloaded <code>grip_edits.json</code>.</p>
+  <p class="help"><b>This is now the exact model the game uses</b> (same hands, wrist sleeves and arms). Her body plays her original animation untouched. For each pose, move and turn the <b>sword</b> in her left hand until it sits where you want it. When you are happy, press <b>Save edits</b> and send me the downloaded <code>grip_edits.json</code>.</p>
 
   <h2>Pose</h2>
   <div class="tabs" id="tabs"></div>
@@ -65,7 +65,7 @@ const BONES = ['pelvis','l_thigh','l_calf','l_foot','l_toe0','r_thigh','r_calf',
 // per pose: pos = sword offset in cm (in her left-hand's own axes), rot = sword rotation in degrees about the sword's own axes (X = across the guard, Y = thin side, Z = along the blade)
 const SW = [['pos','Move the sword (cm)',-60,60,0.5],['rot','Turn the sword (degrees)',-180,180,1]];
 const CLIPS = [['idle','Idle'],['walk','Walk'],['run','Run'],['sprint','Sprint']];
-const KEY = 'cirithSwordEdits.v2';
+const KEY = 'cirithSwordEdits.v3';
 
 const view = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({ antialias:true }); renderer.setPixelRatio(devicePixelRatio); view.appendChild(renderer.domElement);
@@ -77,9 +77,9 @@ const grid = new THREE.GridHelper(6, 12, 0x3a4552, 0x252d37); scene.add(grid);
 function resize() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
-let ballMove, ballTip, drag = null; let swordBase = new THREE.Matrix4(); let clipsData, gripJ, bones = {}, rest = {}, body = [], sword = null, root = null;
+const SPARE = { l_finger0: 'spine2', r_finger0: 'head', l_toe0: 'pelvis', r_toe0: 'pelvis' }; const restWorld = {}, restInv = {}; let ballMove, ballTip, drag = null; let swordBase = new THREE.Matrix4(); let clipsData, gripJ, bones = {}, rest = {}, body = [], sword = null, root = null;
 let clip = 'idle', frame = 0, playing = true, speed = 0.5, acc = 0;
-let edits = {}; try { edits = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+let edits = {}; let hadLocal = false; try { const ls = localStorage.getItem(KEY); hadLocal = !!ls; edits = JSON.parse(ls || '{}'); } catch (e) {}
 const zero = () => ({}); for (const [c] of CLIPS) edits[c] = edits[c] || {};
 const status = (t) => { document.getElementById('status').textContent = t; };
 
@@ -89,7 +89,16 @@ async function init() {
   const swordJ = await (await fetch('data/sword.json')).json();
   const gltf = await new GLTFLoader().loadAsync('data/cirith_armor_rigged.glb');
   root = gltf.scene; scene.add(root);
-  root.traverse(o => { if (o.isBone) { bones[o.name] = o; rest[o.name] = { q: o.quaternion.clone(), p: o.position.clone() }; } if (o.isSkinnedMesh || o.isMesh) body.push(o); });
+  root.traverse(o => { if (o.isBone) { bones[o.name] = o; rest[o.name] = { q: o.quaternion.clone(), p: o.position.clone() }; } if (o.isSkinnedMesh || o.isMesh) o.visible = false; });   // the gallery meshes are NOT what the game uses -> hidden, only the skeleton is used
+  // the EXACT mesh the game uses (angled arms, slid hands, wrist sleeves, trims, ponytail) with the exact atlas
+  const gm = await (await fetch('data/game_mesh.json')).json(); const atlas = await new THREE.TextureLoader().loadAsync('data/game_atlas.png'); atlas.flipY = false; atlas.colorSpace = THREE.SRGBColorSpace;
+  root.updateMatrixWorld(true); for (const n of Object.keys(bones)) { restWorld[n] = bones[n].matrixWorld.clone(); restInv[n] = restWorld[n].clone().invert(); } const gskel = new THREE.Skeleton(gm.joints.map(n => bones[n])); const rootNode = root.getObjectByName('Root') || root;
+  const gmat = new THREE.MeshStandardMaterial({ map: atlas, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, metalness: 0.05 });
+  for (const sl of gm.slots) {
+    const g2 = new THREE.BufferGeometry(); g2.setAttribute('position', new THREE.Float32BufferAttribute(sl.pos, 3)); g2.setAttribute('normal', new THREE.Float32BufferAttribute(sl.nrm, 3)); g2.setAttribute('uv', new THREE.Float32BufferAttribute(sl.uv, 2));
+    g2.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sl.jnt, 4)); g2.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sl.wgt, 4)); g2.setIndex(sl.idx);
+    const sm = new THREE.SkinnedMesh(g2, gmat); sm.frustumCulled = false; rootNode.add(sm); rootNode.updateMatrixWorld(true); sm.bind(gskel, sm.matrixWorld); body.push(sm);
+  }
   // her sword, attached to the left-hand bone with the same frame the game uses (axes measured in the engine, see grip_l.json)
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(swordJ.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(swordJ.nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(swordJ.uv, 2)); g.setIndex(swordJ.idx);
@@ -99,6 +108,7 @@ async function init() {
   sword.matrixAutoUpdate = false; swordBase.makeBasis(X, Y, Z); sword.matrix.copy(swordBase); bones['l_hand'].add(sword);
   const mk = (color, r) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.92 })); m.renderOrder = 999; scene.add(m); return m; };
   ballMove = mk(0xff9a2e, 0.035); ballTip = mk(0x35d0ff, 0.028); setupDrag();
+  if (!hadLocal) { try { const st = await (await fetch('data/start_edits.json')).json(); for (const [c] of CLIPS) edits[c] = (st.clips && st.clips[c]) ? JSON.parse(JSON.stringify(st.clips[c])) : {}; persist(); } catch (e) {} }
   buildUI(); setClip('idle'); animate();
 }
 
@@ -127,7 +137,7 @@ function buildUI() {
   document.getElementById('copyTo').onclick = () => { for (const [c] of CLIPS) if (c !== clip) edits[c] = JSON.parse(JSON.stringify(edits[clip])); persist(); status('Copied this pose\'s numbers to all poses.'); };
   document.getElementById('save').onclick = save;
   document.getElementById('loadBtn').onclick = () => document.getElementById('loadFile').click();
-  document.getElementById('loadFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); for (const [c] of CLIPS) edits[c] = (j.clips && j.clips[c]) || {}; persist(); syncUI(); apply(); status('Loaded ' + f.name); } catch (er) { status('Could not read that file.'); } };
+  document.getElementById('loadFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); if ((j.version || 2) < 3) { status('That file is from the old model (version 2) - it would sit wrong. Use the file I send back, or start fresh.'); return; } for (const [c] of CLIPS) edits[c] = (j.clips && j.clips[c]) || {}; persist(); syncUI(); apply(); status('Loaded ' + f.name); } catch (er) { status('Could not read that file.'); } };
   document.getElementById('showSword').onchange = e => { sword.visible = e.target.checked; };
   document.getElementById('showBody').onchange = e => { for (const m of body) m.visible = e.target.checked; };
   document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => cam(b.dataset.cam));
@@ -142,7 +152,7 @@ function syncUI() {
 }
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(edits)); } catch (e) {} }
 function save() {
-  const out = { version: 2, note: 'sword placement per pose: pos = offset in cm along her left-hand bone axes, rot = degrees (Euler XYZ) about the sword own axes', clips: {} };
+  const out = { version: 3, note: 'made on the exact game mesh. sword placement per pose: pos = offset in cm along her left-hand bone axes, rot = degrees (Euler XYZ) about the sword own axes', clips: {} };
   for (const [c] of CLIPS) { out.clips[c] = {}; for (const [kind] of SW) { const e3 = edits[c][kind]; if (e3 && (e3[0] || e3[1] || e3[2])) out.clips[c][kind] = e3.map(Number); } }
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' })); a.download = 'grip_edits.json'; a.click(); URL.revokeObjectURL(a.href);
   status('Saved grip_edits.json to your Downloads folder - send it to me.');
@@ -159,6 +169,9 @@ function apply() {
   { const ed = edits[clip]; const pos = ed.pos || [0, 0, 0], rot = ed.rot || [0, 0, 0]; sword.matrix.copy(swordBase); eu.set(rot[0] * Math.PI / 180, rot[1] * Math.PI / 180, rot[2] * Math.PI / 180, 'XYZ'); sword.matrix.multiply(new THREE.Matrix4().makeRotationFromEuler(eu)); sword.matrix.setPosition(pos[0] / 100, pos[1] / 100, pos[2] / 100); sword.matrixWorldNeedsUpdate = true; }
   const p = bones['pelvis']; p.position.copy(rest['pelvis'].p); p.position.z += c.dz[f];
   document.getElementById('frame').value = f; document.getElementById('fl').textContent = (f + 1) + ' / ' + c.n;
+  root.updateMatrixWorld(true);
+  // the game drives the spare bones (breasts, glutes, ponytail) so they FOLLOW chest / pelvis / head: bone = follow * followRest^-1 * boneRest
+  for (const [sp, fo] of Object.entries(SPARE)) { const b = bones[sp], f = bones[fo]; if (!b || !f) continue; const want = f.matrixWorld.clone().multiply(restInv[fo]).multiply(restWorld[sp]); const loc = b.parent.matrixWorld.clone().invert().multiply(want); loc.decompose(b.position, b.quaternion, b.scale); }
   root.updateMatrixWorld(true); placeBalls();
 }
 function placeBalls() {

@@ -127,7 +127,7 @@ namespace CirithSim
             try
             {
                 if (wcam == null) wcam = Camera.CreateCamera();
-                var f = me.LookDirection; f.z = 0; f.Normalize(); var side = new Vec3(-f.y, f.x, 0); var target = me.Position + new Vec3(0, 0, 1.0f); var camPos = target + side * 3.2f + new Vec3(0, 0, 0.2f); var look = target - camPos; look.Normalize();
+                var f = me.LookDirection; f.z = 0; f.Normalize(); var side = new Vec3(-f.y, f.x, 0); var target = me.Position + new Vec3(0, 0, 1.0f); var camPos = target + side * 3.2f + new Vec3(0, 0, 0.2f); if (Environment.GetEnvironmentVariable("CIRITH_WCAM") == "front") camPos = target + f * 3.4f - side * 0.9f + new Vec3(0, 0, 0.3f); var look = target - camPos; look.Normalize();
                 var m = Mat3.CreateMat3WithForward(ref look); m.RotateAboutSide(1.5707964f); wcam.Frame = new MatrixFrame(m, camPos); wcam.SetFovVertical(0.9f, 16f / 9f, 0.05f, 2000f);
                 typeof(MissionScreen).GetProperty("CustomCamera").SetValue(ms, wcam);
             }
@@ -160,6 +160,11 @@ namespace CirithSim
             if (label != wlast) { wlast = label; SimSubModule.L($"wtest phase '{label}' at {wt:0.0}s; cirith sword wielded={WeaponAnim.IsWielding(me)} state={wa.Current}"); }
             wa.Update(me, dt);
             float[] marks = { 6.5f, 7.8f, 9f, 10.2f, 11.5f, 13f, 14.2f, 15.5f, 17f, 18.2f, 19.5f, 21f, 22.3f, 24f, 25.3f, 27f, 28.3f, 30f, 31f };
+            if (Environment.GetEnvironmentVariable("CIRITH_WPREVIEW") == "1")
+            {   // dense preview: 12 frames (0.15 s apart) of each animation, then exit
+                if (marks.Length != 48) { var l = new List<float>(); foreach (var st in new[] { 5.5f, 8.7f, 12.7f, 16.7f }) for (int i = 0; i < 12; i++) l.Add(st + i * 0.15f); marks = l.ToArray(); }
+                if (wt > 19.5f) { SimSubModule.L("wtest done"); Utilities.ExitProcess(0); }
+            }
             if (wshot < marks.Length && wt >= marks[wshot]) { Shot($"w_{wshot:00}_{label.Replace(' ', '_')}"); SimSubModule.L($"wtest shot {wshot} state={wa.Current} cirithWielded={WeaponAnim.IsWielding(me)}"); wshot++; }
             if (wt > 32f) { SimSubModule.L("wtest done"); Utilities.ExitProcess(0); }
             return true;
@@ -306,6 +311,7 @@ namespace CirithSim
                 if (me != null) { try { charge.Update(me, dt, ct > 10f && !cDone && Environment.GetEnvironmentVariable("CIRITH_CHARGETEST") == "1"); } catch (Exception ce) { if (!chargeErr) { chargeErr = true; SimSubModule.L("charge err " + ce); } } }
                 if (me != null && ChargeTick(dt)) { }
                 if (me != null) { try { jig.Update(me, dt); } catch (Exception je) { if (!jigErr) { jigErr = true; SimSubModule.L("jiggle err " + je); } } }
+                if (me != null && Environment.GetEnvironmentVariable("CIRITH_WANIM") == "1" && Environment.GetEnvironmentVariable("CIRITH_WTEST") != "1") { try { if (t > 4.5f && t < 4.6f) me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); wa.Update(me, dt); } catch (Exception we) { SimSubModule.L("wanim view err " + we.Message); } }
                 if (me != null && Environment.GetEnvironmentVariable("CIRITH_RESTPOSE") == "1")
                 {   // axis-probe calibration: hold the skeleton in its engine rest pose so the probe weapon's attach frame can be read from screenshots
                     try { var rsk = me.AgentVisuals.GetSkeleton(); int rn = rsk.GetBoneCount(); if (t > 4.5f && t < 4.6f) me.TryToWieldWeaponInSlot(EquipmentIndex.Weapon0, Agent.WeaponWieldActionType.Instant, false); for (int bi = 0; bi < rn; bi++) rsk.SetBoneLocalFrame((sbyte)bi, rsk.GetBoneLocalRestFrame((sbyte)bi, false)); rsk.UpdateEntitialFramesFromLocalFrames(); if (Environment.GetEnvironmentVariable("CIRITH_FORCE") == "1") { rsk.ForceUpdateBoneFrames(); }
