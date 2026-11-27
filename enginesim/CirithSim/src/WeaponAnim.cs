@@ -20,7 +20,7 @@ namespace CirithSim
     public class WeaponAnim
     {
         public const string Item = "cirith_sword";
-        public static InputKey SprintKey = InputKey.V;
+        public static InputKey SprintKey = InputKey.C;
         const float SpeedMult = 1.5f;
 
         class Clip
