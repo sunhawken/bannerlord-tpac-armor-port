@@ -89,6 +89,7 @@ namespace CirithSim
             SimSubModule.L("weapon anim released: " + why);
         }
 
+        bool engineHold;
         static bool EngineBusy(Agent a)
         {
             try { switch (a.GetCurrentActionType(1)) { case Agent.ActionCodeType.Other: case Agent.ActionCodeType.Idle: case Agent.ActionCodeType.Guard: return false; default: return true; } }
@@ -112,7 +113,8 @@ namespace CirithSim
             bool forward = fwd > 0.6f * Math.Max(speed, 0.001f) && speed > 0.2f;
             // ---- state machine (the engine's combat actions always win: no override while attacking / blocking)
             State want;
-            if (EngineBusy(me)) want = State.None;
+            engineHold = EngineBusy(me);
+            if (engineHold) want = State.None;
             else if (sprintHeld && forward && speed > 1.2f) want = State.Sprint;
             else if (speed < 0.25f) want = State.Idle;
             else if (forward) want = speed < 2.4f ? State.Walk : State.Run;
@@ -230,7 +232,12 @@ namespace CirithSim
             try
             {
                 var gf = me.AgentVisuals.GetEntity().GetGlobalFrame(); var hf = me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame(19);
-                var world = gf.TransformToParent(hf.TransformToParent(EditedGrip())); swordEnt.SetGlobalFrame(ref world, false);
+                var world = gf.TransformToParent(hf.TransformToParent(EditedGrip()));
+                if (engineHold)      // the engine's own attack/block/guard animation holds the (invisible) item in the combat hand: the visible sword follows that item instead of the left-hand grip
+                {
+                    try { var pi = me.GetPrimaryWieldedItemIndex(); if (pi != EquipmentIndex.None) { var we = me.GetWeaponEntityFromEquipmentSlot(pi); if (we.IsValid) world = we.GetGlobalFrame(); } } catch { }
+                }
+                swordEnt.SetGlobalFrame(ref world, false);
                 if (Environment.GetEnvironmentVariable("CIRITH_GRIPLOG") == "1" && dbgN++ % 40 == 0 && clip != null)
                 {
                     var back = swordEnt.GetGlobalFrame(); var inv = gf.TransformToLocal(back); var gl = EditedGrip();
