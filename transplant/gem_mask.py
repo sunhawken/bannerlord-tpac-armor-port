@@ -83,6 +83,8 @@ br_sel = f[(_cz >= 1.20) & (_cz < 1.52) & (np.abs(p[f][:, :, 0]).mean(1) < 0.19)
 cut_br = _outside_black_tris([(uv.astype(float), br_sel)], 'breast gems/bead net', halo=0, thr=14, everywhere=True)
 cut_pend = cut_pend | cut_hip | cut_col | cut_br
 clear = clear | cut_pend | cut_ear
+if os.environ.get('CUTOUTS') != '1':      # user request: NO black-transparency cut-outs at all (set CUTOUTS=1 to get the pendant/earring/hip/collar/breast cuts back)
+    clear[:] = False; cut_pend[:] = False; cut_ear[:] = False
 if os.environ.get('DBG'):
     _o=np.asarray(Image.open('../enginesim/tex/atlas1.png').convert('RGB')).astype(int).sum(2)/3
     for _n,_m in (('old reach',reach&dark),('pend',cut_pend&~(cut_hip|cut_col|cut_br)),('ear',cut_ear),('hip',cut_hip),('col',cut_col),('br',cut_br)): print('DBG',_n,int(_m.sum()),'orig lum>=24:',int((_m&(_o>=24)).sum()),'>=40:',int((_m&(_o>=40)).sum()))

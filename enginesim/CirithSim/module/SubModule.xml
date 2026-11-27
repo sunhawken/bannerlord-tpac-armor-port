@@ -25,7 +25,7 @@
     </XmlNode>
     <XmlNode>
       <XmlName id="Items" path="cirith_items"/>
-      <IncludedGameTypes><GameType value="CustomGame"/><GameType value="EditorGame"/></IncludedGameTypes>
+      <IncludedGameTypes><GameType value="CustomGame"/><GameType value="EditorGame"/><GameType value="Campaign"/><GameType value="CampaignStoryMode"/></IncludedGameTypes>
     </XmlNode>
   </Xmls>
 </Module>

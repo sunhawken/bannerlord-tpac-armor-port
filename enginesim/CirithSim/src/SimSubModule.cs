@@ -20,6 +20,8 @@ namespace CirithSim
     public class SimSubModule : MBSubModuleBase
     {
         public static string LogPath;
+        // The auto-battle / auto-quit sim harness is ONLY active when the sim script sets CIRITH_CHAR. In a normal game the module is passive (items + jiggle + charge + inventory keeper).
+        public static bool Harness => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CIRITH_CHAR"));
         public static void L(string m) { try { File.AppendAllText(LogPath, DateTime.Now.ToString("HH:mm:ss.fff ") + m + "\n"); } catch { } }
         float t; int stage; bool menu; public static string Target = "cirith_test";
 
@@ -32,10 +34,16 @@ namespace CirithSim
             L("SubModule loaded, target character = " + Target);
         }
 
-        public override void OnInitialState() { L("initial state (main menu) reached"); menu = true; t = 0; }
+        protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
+        {
+            try { if (gameStarterObject is TaleWorlds.CampaignSystem.CampaignGameStarter cgs) { cgs.AddBehavior(new CirithInventoryBehavior()); L("campaign: inventory keeper registered"); } } catch (Exception e) { L("OnGameStart error " + e.Message); }
+        }
+
+        public override void OnInitialState() { L("initial state (main menu) reached; harness=" + Harness); menu = true; t = 0; }
 
         protected override void OnApplicationTick(float dt)
         {
+            if (!Harness) return;
             t += dt;
             try
             {
@@ -77,7 +85,7 @@ namespace CirithSim
 
         public override void OnMissionBehaviorInitialize(Mission mission)
         {
-            L("mission behavior init"); mission.AddMissionBehavior(new SimBehavior());
+            L("mission behavior init; harness=" + Harness); mission.AddMissionBehavior(Harness && Environment.GetEnvironmentVariable("CIRITH_RUNTIME") != "1" ? (MissionBehavior)new SimBehavior() : new CirithRuntimeBehavior());
         }
     }
 
@@ -90,7 +98,7 @@ namespace CirithSim
 
 
         // ---- bone-control probe: CIRITH_BONETEST="name:dx,dy,dz" lifts that bone (model space, relative to its CURRENT animated frame) every tick, to learn whether SetBoneLocalFrame sticks to the render
-        Jiggle jig = new Jiggle(); bool jigErr, chargeErr;
+        Jiggle jig = new Jiggle(); bool jigErr, chargeErr, rosterTested;
         int boneTestIdx = -2;
         void BoneTest()
         {
@@ -252,6 +260,7 @@ namespace CirithSim
                 if (me != null && Environment.GetEnvironmentVariable("CIRITH_CHARGETEST") == "1") return;
                 if (me != null && MotionTick(dt)) return;
                 if (me != null && ViewQueueTick(dt)) return;
+                if (me != null && !rosterTested && Environment.GetEnvironmentVariable("CIRITH_INVTEST") == "1") { rosterTested = true; try { var r = new TaleWorlds.CampaignSystem.Roster.ItemRoster(); int a1 = CirithInventoryBehavior.EnsureRoster(r, "test: empty"); int a2 = CirithInventoryBehavior.EnsureRoster(r, "test: full"); var it = MBObjectManager.Instance.GetObject<ItemObject>("cirith_body"); r.AddToCounts(it, -1); int a3 = CirithInventoryBehavior.EnsureRoster(r, "test: body sold"); r.AddToCounts(it, 2); int a4 = CirithInventoryBehavior.EnsureRoster(r, "test: has 3 bodies"); SimSubModule.L($"INVENTORY TEST: empty roster -> added {a1} (expect 4); full -> {a2} (0); after selling body -> {a3} (1); with 3 bodies -> {a4} (0); counts now: " + string.Join(",", CirithInventoryBehavior.Pieces.Select(x => x + "=" + r.GetItemNumber(MBObjectManager.Instance.GetObject<ItemObject>(x))))); } catch (Exception ie) { SimSubModule.L("INVENTORY TEST ERROR " + ie); } }
                 if (me != null && !camSet && t > 3f)
                 {
                     SimSubModule.L($"agent found at {me.Position}, equipment: " + string.Join(",", Enumerable.Range(0, 12).Select(i => me.SpawnEquipment[(EquipmentIndex)i].Item?.StringId ?? "-")));
