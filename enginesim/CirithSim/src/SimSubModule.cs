@@ -90,7 +90,7 @@ namespace CirithSim
 
 
         // ---- bone-control probe: CIRITH_BONETEST="name:dx,dy,dz" lifts that bone (model space, relative to its CURRENT animated frame) every tick, to learn whether SetBoneLocalFrame sticks to the render
-        Jiggle jig = new Jiggle(); bool jigErr;
+        Jiggle jig = new Jiggle(); bool jigErr, chargeErr;
         int boneTestIdx = -2;
         void BoneTest()
         {
@@ -105,6 +105,44 @@ namespace CirithSim
                 sk.SetBoneLocalFrame((sbyte)boneTestIdx, local); sk.UpdateEntitialFramesFromLocalFrames();
             }
             catch (Exception e) { SimSubModule.L("bonetest err " + e.Message); }
+        }
+
+
+        // ---- charge test (CIRITH_CHARGETEST=1): she is ordered to walk-run 60 m ahead; speed is measured 2 s before and during the charge; side camera frames are written to shots/.
+        Charge charge = new Charge(); float ct = -1; Vec3 cStart; float sA, sB; int nA, nB; int cshot; bool cOrdered, cTrig, cDone; Camera ccam; Vec3 lastP;
+        string RunSim() { try { float acc = 0, mx = 0; var arr = new float[32]; me.GetRunningSimulationDataUntilMaximumSpeedReached(ref acc, ref mx, arr); return $"engine running simulation: top speed {mx:0.00} m/s, time to reach {acc:0.00} s"; } catch (Exception e) { return "runsim err " + e.Message; } }
+        bool ChargeTick(float dt)
+        {
+            if (Environment.GetEnvironmentVariable("CIRITH_CHARGETEST") != "1") return false;
+            if (ct < 0) { ct = 0; shotDir = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "shots"); Directory.CreateDirectory(shotDir); }
+            ct += dt; var ms = ScreenManager.TopScreen as MissionScreen; if (ms == null) return true;
+            try
+            {
+                if (ccam == null) ccam = Camera.CreateCamera();
+                var f = me.LookDirection; f.z = 0; f.Normalize(); var side = new Vec3(-f.y, f.x, 0); var target = me.Position + new Vec3(0, 0, 1.0f) + f * 0.4f; var camPos = target + side * 3.0f + new Vec3(0, 0, 0.2f); var look = target - camPos; look.Normalize();
+                var m = Mat3.CreateMat3WithForward(ref look); m.RotateAboutSide(1.5707964f); ccam.Frame = new MatrixFrame(m, camPos); ccam.SetFovVertical(0.9f, 16f / 9f, 0.05f, 2000f);
+                typeof(MissionScreen).GetProperty("CustomCamera").SetValue(ms, ccam);
+            }
+            catch (Exception e) { SimSubModule.L("charge cam err " + e.Message); }
+            float spd = ct > 0.05f ? (me.Position - lastP).Length / Math.Max(dt, 0.0005f) : 0f; lastP = me.Position;
+            if (ct > 5f && !cOrdered)
+            {
+                cOrdered = true; try { SimSubModule.L("mission mode " + Mission.Current.Mode + " ; deployment=" + (Mission.Current.GetMissionBehavior<TaleWorlds.MountAndBlade.DeploymentHandler>() != null)); Mission.Current.SetMissionMode(MissionMode.Battle, false); SimSubModule.L("mission mode now " + Mission.Current.Mode); } catch (Exception me2) { SimSubModule.L("mode err " + me2.Message); }
+                try { Mission.Current.AllowAiTicking = true; Mission.Current.PauseAITick = false; SimSubModule.L("AI ticking on; deploymentFinished=" + Mission.Current.IsDeploymentFinished); } catch (Exception e3) { SimSubModule.L("ai tick err " + e3.Message); }
+                try { SimSubModule.L("controller was " + me.Controller); me.Controller = AgentControllerType.AI; SimSubModule.L("controller now " + me.Controller); } catch (Exception ee) { SimSubModule.L("controller err " + ee.Message); }
+                var fw = me.LookDirection; fw.z = 0; fw.Normalize(); var tgt = me.Position + fw * 120f;
+                try { var wp = new WorldPosition(Mission.Current.Scene, UIntPtr.Zero, tgt, false); me.SetScriptedPosition(ref wp, false, Agent.AIScriptedFrameFlags.None); SimSubModule.L("charge test: ordered to move 120 m ahead from " + me.Position); } catch (Exception e) { SimSubModule.L("order err " + e.Message); }
+            }
+            if (ct > 8f && ct <= 10f) { sA += spd; nA++; }
+            if (ct > 9f && ct < 9.05f) SimSubModule.L(RunSim()); SimSubModule.L($"maxFwdSpeed {me.GetMaximumForwardUnlimitedSpeed():0.00} speedLimit {me.GetMaximumSpeedLimit():0.00} maxMult {me.GetAgentDrivenPropertyValue(DrivenProperty.MaxSpeedMultiplier):0.00} pos {me.Position}");
+            if (ct > 12f && ct < 12.05f) SimSubModule.L("CHARGING " + RunSim()); SimSubModule.L($"CHARGING: maxFwdSpeed {me.GetMaximumForwardUnlimitedSpeed():0.00} speedLimit {me.GetMaximumSpeedLimit():0.00} maxMult {me.GetAgentDrivenPropertyValue(DrivenProperty.MaxSpeedMultiplier):0.00} pos {me.Position}");
+            if (ct > 10f && !cTrig) { cTrig = true; SimSubModule.L($"charge test: baseline speed {sA / Math.Max(nA, 1):0.00} m/s over {nA} ticks; triggering charge"); }
+            bool trig = cTrig && !cDone;
+            if (trig) cDone = charge.Active || cDone;
+            if (ct > 11.5f && ct <= 13.5f) { sB += spd; nB++; }
+            if (ct > 10.8f && cshot < 24 && ct >= 10.8f + cshot * 0.1f) { Shot($"ch_{cshot:00}"); cshot++; }
+            if (ct > 14f) { SimSubModule.L($"charge test RESULT: baseline {sA / Math.Max(nA, 1):0.00} m/s, charging {sB / Math.Max(nB, 1):0.00} m/s, ratio {(sB / Math.Max(nB, 1)) / Math.Max(sA / Math.Max(nA, 1), 0.001f):0.00}"); Utilities.ExitProcess(0); }
+            return true;
         }
 
         // ---- motion test (cloth/jiggle). CIRITH_MOTION=1 -> slide + stop, side camera, frames in shots/.
@@ -208,7 +246,10 @@ namespace CirithSim
             {
                 if (me == null) me = Mission.Current.Agents.FirstOrDefault(a => a.Character != null && a.Character.StringId == SimSubModule.Target);
                 if (me != null) BoneTest();
+                if (me != null) { try { charge.Update(me, dt, ct > 10f && !cDone && Environment.GetEnvironmentVariable("CIRITH_CHARGETEST") == "1"); } catch (Exception ce) { if (!chargeErr) { chargeErr = true; SimSubModule.L("charge err " + ce); } } }
+                if (me != null && ChargeTick(dt)) { }
                 if (me != null) { try { jig.Update(me, dt); } catch (Exception je) { if (!jigErr) { jigErr = true; SimSubModule.L("jiggle err " + je); } } }
+                if (me != null && Environment.GetEnvironmentVariable("CIRITH_CHARGETEST") == "1") return;
                 if (me != null && MotionTick(dt)) return;
                 if (me != null && ViewQueueTick(dt)) return;
                 if (me != null && !camSet && t > 3f)

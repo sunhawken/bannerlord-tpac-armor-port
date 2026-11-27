@@ -12,6 +12,7 @@
     <Reference Include="TaleWorlds.MountAndBlade"><HintPath>$(G)/bin/Win64_Shipping_Client/TaleWorlds.MountAndBlade.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TaleWorlds.ObjectSystem"><HintPath>$(G)/bin/Win64_Shipping_Client/TaleWorlds.ObjectSystem.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TaleWorlds.ScreenSystem"><HintPath>$(G)/bin/Win64_Shipping_Client/TaleWorlds.ScreenSystem.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="TaleWorlds.InputSystem"><HintPath>$(G)/bin/Win64_Shipping_Client/TaleWorlds.InputSystem.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TaleWorlds.DotNet"><HintPath>$(G)/bin/Win64_Shipping_Client/TaleWorlds.DotNet.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TaleWorlds.MountAndBlade.View"><HintPath>$(G)/Modules/Native/bin/Win64_Shipping_Client/TaleWorlds.MountAndBlade.View.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TaleWorlds.MountAndBlade.CustomBattle"><HintPath>$(G)/Modules/CustomBattle/bin/Win64_Shipping_Client/TaleWorlds.MountAndBlade.CustomBattle.dll</HintPath><Private>false</Private></Reference>
