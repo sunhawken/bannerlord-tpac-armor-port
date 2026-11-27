@@ -61,7 +61,7 @@ namespace CirithSim
             tried = true;
             try
             {
-                bool mir = Environment.GetEnvironmentVariable("CIRITH_MIRROR") == "1"; string sfx = mir ? "_m" : ""; idle = Clip.Load("idle" + sfx); walk = Clip.Load("walk" + sfx); run = Clip.Load("run" + sfx); charge = Clip.Load("charge" + sfx); loaded = true;
+                bool mir = Environment.GetEnvironmentVariable("CIRITH_LEFT") != "1"; Mirrored = mir; string sfx = mir ? "_m" : ""; idle = Clip.Load("idle" + sfx); walk = Clip.Load("walk" + sfx); run = Clip.Load("run" + sfx); charge = Clip.Load("charge" + sfx); loaded = true;
                 SimSubModule.L($"weapon anim: clips loaded (idle {idle.N}, walk {walk.N}, run {run.N}, sprint {charge.N} frames @60 fps); natural speeds walk {walk.NatSpeed:0.00} run {run.NatSpeed:0.00} sprint {charge.NatSpeed:0.00} m/s");
                 try { var g = File.ReadAllText(Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip.txt")).Split(new[] { ' ', (char)10, (char)13 }, StringSplitOptions.RemoveEmptyEntries).Select(P).ToArray();
                       grip = new MatrixFrame(new Mat3(new Vec3(g[0], g[3], g[6]), new Vec3(g[1], g[4], g[7]), new Vec3(g[2], g[5], g[8])), Vec3.Zero); gripLoaded = true; try { var fr = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip_r.txt"); if (File.Exists(fr)) { var q = File.ReadAllText(fr).Split(new[] { ' ', (char)10, (char)13 }, StringSplitOptions.RemoveEmptyEntries).Select(P).ToArray(); gripR = new MatrixFrame(new Mat3(new Vec3(q[0], q[3], q[6]), new Vec3(q[1], q[4], q[7]), new Vec3(q[2], q[5], q[8])), Vec3.Zero); } } catch { } LoadEdits(); SimSubModule.L($"weapon grip frame loaded: blade in l_hand frame = {g[2]:0.000},{g[5]:0.000},{g[8]:0.000}"); } catch (Exception ge) { SimSubModule.L("grip load failed: " + ge.Message); }
@@ -89,6 +89,7 @@ namespace CirithSim
             SimSubModule.L("weapon anim released: " + why);
         }
 
+        public static bool Mirrored = true; readonly Dictionary<string, MatrixFrame> editsR = new Dictionary<string, MatrixFrame>();
         bool engineHold;
         static bool EngineBusy(Agent a)
         {
@@ -184,6 +185,9 @@ namespace CirithSim
         {
             try
             {
+                var fr = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip_edits_r.txt");
+                if (File.Exists(fr)) foreach (var l in File.ReadAllLines(fr)) { var n0 = l.Split(' ')[0]; var v = l.Split(' ').Skip(1).Where(x => x.Length > 0).Select(P).ToArray(); if (v.Length == 12) editsR[n0] = new MatrixFrame(new Mat3(new Vec3(v[3], v[6], v[9]), new Vec3(v[4], v[7], v[10]), new Vec3(v[5], v[8], v[11])), new Vec3(v[0], v[1], v[2])); }
+                if (editsR.Count > 0) SimSubModule.L("right-hand grips loaded for: " + string.Join(", ", editsR.Keys));
                 var f = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip_edits.txt"); if (!File.Exists(f)) return;
                 foreach (var l in File.ReadAllLines(f)) { var q = l.Split(' ').Where(x => x.Length > 0).ToArray(); if (q.Length == 7) edits[q[0]] = q.Skip(1).Select(P).ToArray(); }
                 SimSubModule.L("weapon grip edits loaded for: " + string.Join(", ", edits.Keys));
@@ -200,6 +204,7 @@ namespace CirithSim
         MatrixFrame EditedGrip()
         {
             string key = Current == State.Sprint ? "sprint" : Current.ToString().ToLowerInvariant();
+            if (Mirrored) return editsR.TryGetValue(key, out var fr_) ? fr_ : gripR;
             if (!edits.TryGetValue(key, out var e)) return grip;
             var re = Rxyz(e[3], e[4], e[5]);                                       // rotation about the sword's own axes
             var rot = new Mat3(); var m = grip.rotation;                              // R = B * Redit
@@ -231,7 +236,7 @@ namespace CirithSim
             if (swordEnt == null) return;
             try
             {
-                var gf = me.AgentVisuals.GetEntity().GetGlobalFrame(); var hf = me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame(19);
+                var gf = me.AgentVisuals.GetEntity().GetGlobalFrame(); var hf = me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame((sbyte)(Mirrored ? 26 : 19));
                 var world = gf.TransformToParent(hf.TransformToParent(EditedGrip()));
                 if (engineHold)      // the engine's own attack/block/guard animation moves the combat (right) hand: the visible sword sits in that hand, same grip as the left one but mirrored
                 {

@@ -37,3 +37,4 @@ json.dump(v3, open('../grip_editor/grip_edits.json', 'w'), indent=1)
 import subprocess
 for a, n in ((0, 'idle'), (1, 'walk'), (2, 'run'), (4, 'charge')):
     r = subprocess.run([sys.executable, 'retarget_anim.py', str(a), n], capture_output=True, text=True); print(n, [l for l in r.stdout.splitlines() if 'joint adjustments' in l] or 'no joint adjustments', r.returncode)
+r = subprocess.run([sys.executable, 'mirror_clips.py'], capture_output=True, text=True); print('mirror_clips (sword in the right hand):', r.stdout.strip().splitlines()[-1] if r.stdout else r.stderr[-200:], r.returncode)
