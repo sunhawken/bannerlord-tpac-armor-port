@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using TaleWorlds.Core;
+using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 
 namespace CirithSim
@@ -72,6 +73,29 @@ namespace CirithSim
             }
             catch { }
         }
+        // ---- measurement (CIRITH_GRIPMEASURE=1): where does the ENGINE put a wielded weapon relative to the r_hand bone? (weapon entity frame vs hand bone frame, in agent space)
+        float measT; int measN;
+        void GripMeasure(Agent m)
+        {
+            try
+            {
+                if (Environment.GetEnvironmentVariable("CIRITH_GRIPMEASURE") != "1" || measN >= 40) return; measT += 0.016f; if (measT < 0.4f) return; measT = 0;
+                var pi = m.GetPrimaryWieldedItemIndex(); if (pi == EquipmentIndex.None) { if (measN++ % 5 == 0) SimSubModule.L("gripmeasure: nothing wielded"); return; }
+                var we = m.GetWeaponEntityFromEquipmentSlot(pi); if (!we.IsValid) { SimSubModule.L("gripmeasure: weapon entity invalid for " + m.Equipment[pi].Item?.StringId); measN++; return; }
+                var gf = m.AgentVisuals.GetEntity().GetGlobalFrame(); var wf = we.GetGlobalFrame(); var sk = m.AgentVisuals.GetSkeleton(); var hf = sk.GetBoneEntitialFrame(26);
+                float sc = gf.rotation.s.Length;
+                Vec3 N(Vec3 v) { v.Normalize(); return v; }
+                var gs = N(gf.rotation.s); var gfv = N(gf.rotation.f); var gu = N(gf.rotation.u);
+                Vec3 L(Vec3 d) => new Vec3(Vec3.DotProduct(d, gs), Vec3.DotProduct(d, gfv), Vec3.DotProduct(d, gu));      // world vector -> agent entity space
+                var wo = L(wf.origin - gf.origin) * (1f / sc); var ws = L(N(wf.rotation.s)); var wff = L(N(wf.rotation.f)); var wu = L(N(wf.rotation.u));
+                var hs = N(hf.rotation.s); var hff = N(hf.rotation.f); var hu = N(hf.rotation.u);
+                Vec3 H(Vec3 d) => new Vec3(Vec3.DotProduct(d, hs), Vec3.DotProduct(d, hff), Vec3.DotProduct(d, hu));          // agent space -> hand bone space
+                var ro = H(wo - hf.origin); var rs = H(ws); var rf = H(wff); var ru = H(wu);
+                SimSubModule.L($"gripmeasure {m.Equipment[pi].Item?.StringId} act={m.GetCurrentActionType(1)} scale={sc:0.000} | weapon in r_hand frame: origin=({ro.x:0.0000},{ro.y:0.0000},{ro.z:0.0000}) s=({rs.x:0.000},{rs.y:0.000},{rs.z:0.000}) f=({rf.x:0.000},{rf.y:0.000},{rf.z:0.000}) u=({ru.x:0.000},{ru.y:0.000},{ru.z:0.000})");
+                measN++;
+            }
+            catch (Exception e) { SimSubModule.L("gripmeasure err " + e.Message); measN++; }
+        }
         public override void OnMissionTick(float dt)
         {
             life += dt; if (SimSubModule.Harness && Environment.GetEnvironmentVariable("CIRITH_RUNTIME") == "1" && Environment.GetEnvironmentVariable("CIRITH_LIVE") != "1" && life > (Environment.GetEnvironmentVariable("CIRITH_ATTACKTEST") == "1" ? 40f : Environment.GetEnvironmentVariable("CIRITH_VOICETEST") == "1" ? 25f : 20f)) { SimSubModule.L("runtime test: done (jiggle agents tracked: " + jig.Count + ", main=" + (Agent.Main != null) + ")"); TaleWorlds.Engine.Utilities.ExitProcess(0); }
@@ -105,7 +129,7 @@ namespace CirithSim
                 {   // test: ask the engine for each voice type; the Harmony prefix must swap them for the WAVs
                     int vi = (int)((life - 4f) / 1.2f); if (life > 4f && vi != lastVoice && vi < 12) { lastVoice = vi; var vt = new[] { SkinVoiceManager.VoiceType.Grunt, SkinVoiceManager.VoiceType.Jump, SkinVoiceManager.VoiceType.Yell, SkinVoiceManager.VoiceType.Pain, SkinVoiceManager.VoiceType.Death, SkinVoiceManager.VoiceType.Stun, SkinVoiceManager.VoiceType.Fear, SkinVoiceManager.VoiceType.Climb, SkinVoiceManager.VoiceType.Focus, SkinVoiceManager.VoiceType.Debacle, SkinVoiceManager.VoiceType.Victory, SkinVoiceManager.VoiceType.Drown }; try { m.MakeVoice(vt[vi], SkinVoiceManager.CombatVoiceNetworkPredictionType.NoPrediction); } catch (Exception ve) { SimSubModule.L("voice test err " + ve.Message); } }
                 }
-                if (m != null && m.IsActive()) { VoiceFromActions(m); SilenceVanilla(m); }
+                if (m != null && m.IsActive()) { VoiceFromActions(m); SilenceVanilla(m); GripMeasure(m); }
                 foreach (var a in Mission.Current.Agents)
                 {
                     if (a != null && a.IsActive() && a.AgentVisuals != null && WeaponAnim.IsWielding(a) || (a != null && wanim.ContainsKey(a))) { if (!wanim.TryGetValue(a, out var wa)) { wa = new WeaponAnim(); wanim[a] = wa; SimSubModule.L("runtime: weapon controller attached to " + (a.Name ?? "agent")); } wa.Update(a, dt); }

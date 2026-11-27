@@ -196,8 +196,38 @@ namespace CirithSim
 
         // our own sword entity: placed every tick at  agentFrame * handBoneFrame * grip * userEdit  (the engine's own weapon attachment ignores bone overrides, so it is hidden while we drive the arm)
         GameEntity swordEnt; Dictionary<string, float[]> edits = new Dictionary<string, float[]>();
+        readonly Dictionary<string, float[]> editsAtk = new Dictionary<string, float[]>();
+        // the animation clip the engine is playing now ("ready_thrust_1h", "release_slashright_1h", ...) -> the key of the editor's attack tabs
+        string AtkKey(Agent me)
+        {
+            try
+            {
+                var ac = me.GetCurrentAction(1); var nm = me.ActionSet.GetAnimationName(ref ac); if (string.IsNullOrEmpty(nm)) return null;
+                nm = nm.Replace("quick_", "").Replace("_balanced", "").Replace("_unbalanced", "").Replace("_left_stance", "").Replace("_lstance", "");
+                nm = System.Text.RegularExpressions.Regex.Replace(nm, "^(blocked|stuck)_", "release_"); nm = System.Text.RegularExpressions.Regex.Replace(nm, "^ready_from_[a-z]+_", "ready_"); nm = nm.Replace("ready_continue_", "ready_");
+                lastAtkName = nm; return nm;
+            }
+            catch { return null; }
+        }
+        string lastAtkName = "", lastLoggedAtk = null;
+        MatrixFrame AtkGrip(Agent me)
+        {
+            var k = AtkKey(me); if (k != lastLoggedAtk) { lastLoggedAtk = k; SimSubModule.L("attack clip: " + k + (k != null && editsAtk.ContainsKey(k) ? " (edited grip)" : " (base grip)")); }
+            if (k != null && editsAtk.TryGetValue(k, out var e))
+            {
+                var re = Rxyz(e[3], e[4], e[5]); var rot = new Mat3(); var m = gripR.rotation; Vec3 Mul(Mat3 A, Vec3 v) => A.s * v.x + A.f * v.y + A.u * v.z;
+                rot.s = Mul(m, re.s); rot.f = Mul(m, re.f); rot.u = Mul(m, re.u); return new MatrixFrame(rot, new Vec3(e[0], e[1], e[2]));
+            }
+            return gripR;
+        }
         void LoadEdits()
         {
+            try
+            {
+                var fa = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip_edits_atk.txt");
+                if (File.Exists(fa)) { foreach (var l in File.ReadAllLines(fa)) { var q = l.Split(' ').Where(x => x.Length > 0).ToArray(); if (q.Length == 7) editsAtk[q[0]] = q.Skip(1).Select(P).ToArray(); } SimSubModule.L("attack grips loaded for: " + string.Join(", ", editsAtk.Keys)); }
+            }
+            catch (Exception e) { SimSubModule.L("attack grips load failed: " + e.Message); }
             try
             {
                 var fr = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip_edits_r.txt");
@@ -255,7 +285,7 @@ namespace CirithSim
                 var world = gf.TransformToParent(hf.TransformToParent(EditedGrip()));
                 if (engineHold)      // the engine's own attack/block/guard animation moves the combat (right) hand: the visible sword sits in that hand, same grip as the left one but mirrored
                 {
-                    var hr = me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame(26); world = gf.TransformToParent(hr.TransformToParent(gripR));
+                    var hr = me.AgentVisuals.GetSkeleton().GetBoneEntitialFrame(26); world = gf.TransformToParent(hr.TransformToParent(AtkGrip(me)));
                 }
                 swordEnt.SetGlobalFrame(ref world, false);
                 if (Environment.GetEnvironmentVariable("CIRITH_GRIPLOG") == "1" && dbgN++ % 40 == 0 && clip != null)

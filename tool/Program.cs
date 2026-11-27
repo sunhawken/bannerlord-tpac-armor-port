@@ -90,6 +90,49 @@ class P
             }
             return;
         }
+        if (a[1] == "animdump")
+        {
+            // animdump <out.json> <anim name>... : local bone rotations (3x3 row-major, glTF/bone-local convention) resampled to 60 fps; bone names in skeleton order
+            var bones = Skel.Definition.Data.Bones; var sb = new System.Text.StringBuilder(); sb.Append("{\"bones\":[" + string.Join(",", bones.Select(b => "\"" + b.Name + "\"")) + "],\"anims\":{");
+            bool firstA = true;
+            foreach (var name in a.Skip(3))
+            {
+                SkeletalAnimation an = null; float cs1 = -1, cs2 = -1; string cinfo = "";
+                if (!AN.TryGetValue(name, out an))
+                {   // an action's animation is an AnimationClip: a time range (Source1..Source2) of a SkeletalAnimation
+                    var clip = M.LoadedAssets.OfType<AnimationClip>().FirstOrDefault(c => c.Name == name);
+                    if (clip != null) { an = M.LoadedAssets.OfType<SkeletalAnimation>().FirstOrDefault(x => x.Guid == clip.Animation); cs1 = clip.Source1; cs2 = clip.Source2; cinfo = $" (clip of {an?.Name}: source {cs1}..{cs2} dur {clip.Duration} voice '{clip.VoiceCode}' sound '{clip.SoundCode}')"; }
+                }
+                if (an == null || an.Definition?.Data == null) { Console.WriteLine("MISSING " + name); continue; }
+                var d = an.Definition.Data; float tMin = float.MaxValue, tMax = 0;
+                foreach (var ba in d.BoneAnims) if (ba.RotationFrames.Count > 0) { tMin = Math.Min(tMin, ba.RotationFrames.Keys[0]); tMax = Math.Max(tMax, ba.RotationFrames.Keys[ba.RotationFrames.Count - 1]); }
+                Console.WriteLine($"  {name}: skeletal keys {tMin}..{tMax}{cinfo}");
+                if (cs1 >= 0 && cs2 > cs1 && Environment.GetEnvironmentVariable("CLIPRANGE") == "1") { tMin = cs1; tMax = cs2; }
+                int n = Math.Max(2, (int)Math.Round((tMax - tMin) / FPS * 60f) + 1); var vals = new System.Text.StringBuilder();
+                for (int f = 0; f < n; f++)
+                {
+                    float t = tMin + f / 60f * FPS;
+                    for (int i = 0; i < bones.Count; i++)
+                    {
+                        Quaternion q;
+                        if (i < d.BoneAnims.Count && d.BoneAnims[i].RotationFrames.Count > 0)
+                        {
+                            var rf = d.BoneAnims[i].RotationFrames; var ks = rf.Keys; int hi = 0; while (hi < ks.Count && ks[hi] < t) hi++;
+                            if (hi == 0) q = rf.Values[0].Value; else if (hi >= ks.Count) q = rf.Values[ks.Count - 1].Value;
+                            else { float u = (t - ks[hi - 1]) / (ks[hi] - ks[hi - 1]); var q0 = Quaternion.Normalize(rf.Values[hi - 1].Value); var q1 = Quaternion.Normalize(rf.Values[hi].Value); if (Quaternion.Dot(q0, q1) < 0) q1 = new Quaternion(-q1.X, -q1.Y, -q1.Z, -q1.W); q = Quaternion.Slerp(q0, q1, u); }
+                        }
+                        else { Matrix4x4 r = bones[i].RestFrame; r.M44 = 1; Matrix4x4.Decompose(r, out _, out q, out _); }
+                        q = Quaternion.Normalize(q); float x = q.X, y = q.Y, z = q.Z, w = q.W;
+                        float[] m = { 1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y) };
+                        foreach (var v in m) { vals.Append(v.ToString("0.#####", System.Globalization.CultureInfo.InvariantCulture)); vals.Append(','); }
+                    }
+                }
+                if (vals.Length > 0) vals.Length--;
+                if (!firstA) sb.Append(","); firstA = false; sb.Append("\"" + name + "\":{\"n\":" + n + ",\"rot\":[" + vals + "]}");
+                Console.WriteLine($"{name}: keys {tMin}..{tMax} -> {n} frames @60");
+            }
+            sb.Append("}}"); File.WriteAllText(a[2], sb.ToString()); return;
+        }
         if (a[1] == "humananims")
         {
             foreach (var an in AN.Values.Where(x => x.Skeleton == Skel.Guid).OrderBy(x => x.Name))

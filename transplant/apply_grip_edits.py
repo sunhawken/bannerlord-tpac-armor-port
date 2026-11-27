@@ -28,6 +28,14 @@ for clip in ('idle', 'walk', 'run', 'sprint'):
     if any(abs(x) > 1e-6 for x in list(p) + list(r)):
         out.append(f"{clip} {p[0]/100:.5f} {p[1]/100:.5f} {p[2]/100:.5f} {r[0]:.3f} {r[1]:.3f} {r[2]:.3f}"); v3['clips'][clip] = dict(pos=[round(x, 2) for x in p], rot=[round(x, 1) for x in r])
     if adj: v3['clips'].setdefault(clip, {})['adj'] = adj
+# right-hand sword placement for the engine's own attack / block animations (editor tabs 'atk_<clip>'): pos [cm] in the right-hand bone frame, rot [deg] about the sword axes, relative to the mirrored base grip
+atk = []
+for k, e in j.get('clips', {}).items():
+    if not k.startswith('atk_'): continue
+    p, r = e.get('pos', [0, 0, 0]), e.get('rot', [0, 0, 0])
+    if any(abs(x) > 1e-6 for x in list(p) + list(r)): atk.append(f"{k[4:]} {p[0]/100:.5f} {p[1]/100:.5f} {p[2]/100:.5f} {r[0]:.3f} {r[1]:.3f} {r[2]:.3f}"); v3['clips'][k] = dict(pos=[round(x, 2) for x in p], rot=[round(x, 1) for x in r])
+open('../enginesim/CirithSim/module/ModuleData/cirith_grip_edits_atk.txt', 'w').write(chr(10).join(atk) + (chr(10) if atk else ''))
+print('attack/block sword placements:', len(atk))
 dst = '../enginesim/CirithSim/module/ModuleData/cirith_grip_edits.txt'
 open(dst, 'w').write(chr(10).join(out) + (chr(10) if out else ''))
 if ver == 2: json.dump(v3, open('../grip_editor/data/start_edits.json', 'w'), indent=1)      # the editor start point = the carried version-2 edits; a saved version-3 file never overwrites it

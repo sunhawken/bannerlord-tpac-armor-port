@@ -73,7 +73,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const BONES = ['pelvis','l_thigh','l_calf','l_foot','l_toe0','r_thigh','r_calf','r_foot','r_toe0','spine','spine1','spine2','neck','head','l_clavicle','l_upperarm_twist','l_upperarm_twist1','l_foretwist','l_foretwist1','l_hand','l_finger0','r_clavicle','r_upperarm_twist','r_upperarm_twist1','r_foretwist','r_foretwist1','r_hand','r_finger0'];
 // per pose: pos = sword offset in cm (in her left-hand's own axes), rot = sword rotation in degrees about the sword's own axes (X = across the guard, Y = thin side, Z = along the blade)
 const SW = [['pos','Move the sword (cm)',-300,300,0.5],['rot','Turn the sword (degrees)',-720,720,1]];
-const CLIPS = [['idle','Idle'],['walk','Walk'],['run','Run'],['sprint','Sprint'],['tpose','T-pose']];
+const ATK = [['ready_thrust_1h','Ready: thrust'],['release_thrust_1h','Swing: thrust'],['ready_slashright_1h','Ready: slash right'],['release_slashright_1h','Swing: slash right'],['ready_slashleft_1h','Ready: slash left'],['release_slashleft_1h','Swing: slash left'],['ready_overswing_1h','Ready: overswing'],['release_overswing_1h','Swing: overswing'],['defend_up_1h_parry_light','Block: up'],['defend_right_1h_parry_light','Block: right'],['defend_left_1h_parry_light','Block: left'],['defend_forward_1h_parry_light','Block: forward']];
+const CLIPS = [['idle','Idle'],['walk','Walk'],['run','Run'],['sprint','Sprint'],['tpose','T-pose'], ...ATK.map(([n, l]) => ['atk_' + n, l])];
+const isAtk = c => c.startsWith('atk_');
 const KEY = 'cirithSwordEdits.v3';
 // joint balls: [id, label, bone whose origin (+ local offset) is the ball, local offset (m) or null, bone that ROTATES when the ball is dragged]
 const JOINTS = [['hips','Hips','spine',null,'pelvis'],['spine','Lower spine','spine1',null,'spine'],['chest','Chest','spine2',null,'spine1'],['upper','Upper back','neck',null,'spine2'],['neck','Neck','head',null,'neck'],['head','Head','head',[0.16,0,0],'head']];
@@ -93,7 +95,7 @@ function resize() { const w = view.clientWidth, h = view.clientHeight; renderer.
 addEventListener('resize', resize); resize();
 
 const SPARE = { l_finger0: 'spine2', r_finger0: 'head', l_toe0: 'pelvis', r_toe0: 'pelvis' }; const restWorld = {}, restInv = {}; let ballMove, ballTip, drag = null, dragAdj = null; let swordBase = new THREE.Matrix4(); let clipsData, gripJ, bones = {}, rest = {}, body = [], sword = null, root = null;
-let clip = 'idle', frame = 0, playing = true, speed = 0.5, acc = 0; const toRad = Math.PI / 180;
+let gripR = null, swordBaseL = new THREE.Matrix4(), swordBaseR = new THREE.Matrix4(); let clip = 'idle', frame = 0, playing = true, speed = 0.5, acc = 0; const toRad = Math.PI / 180;
 let edits = {}; let hadLocal = false; try { const ls = localStorage.getItem(KEY); hadLocal = !!ls; edits = JSON.parse(ls || '{}'); } catch (e) {}
 const zero = () => ({}); for (const [c] of CLIPS) edits[c] = edits[c] || {};
 const status = (t) => { document.getElementById('status').textContent = t; };
@@ -101,6 +103,11 @@ const status = (t) => { document.getElementById('status').textContent = t; };
 async function init() {
   clipsData = await (await fetch('data/clips.json')).json();
   gripJ = await (await fetch('data/grip_l.json')).json();
+  try {   // the game's own default one-handed attack / block animations (exported from the packs with the tool's animdump verb) -> extra tabs; the sword is held in the RIGHT hand there
+    const ea = await (await fetch('data/engine_attacks.json')).json(); const bi = ea.bones.map(n => BONES.indexOf(n));
+    for (const [name] of ATK) { const a = ea.anims[name]; if (!a) continue; const rot = new Array(a.n * 28 * 9); for (let f = 0; f < a.n; f++) for (let b = 0; b < 28; b++) for (let k = 0; k < 9; k++) rot[(f * 28 + bi[b]) * 9 + k] = a.rot[(f * 28 + b) * 9 + k]; clipsData.clips['atk_' + name] = { n: a.n, nb: 28, dz: new Array(a.n).fill(0), rot }; }
+    gripR = await (await fetch('data/grip_r.json')).json();
+  } catch (e) { console.warn('attack clips missing', e); }
   const swordJ = await (await fetch('data/sword.json')).json();
   const gltf = await new GLTFLoader().loadAsync('data/cirith_armor_rigged.glb');
   root = gltf.scene; scene.add(root);
@@ -120,7 +127,8 @@ async function init() {
   const tex = await new THREE.TextureLoader().loadAsync('data/sword.png'); tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace;
   sword = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, metalness: 0.4, roughness: 0.5 }));
   const X = new THREE.Vector3(...gripJ.X).normalize(), Y = new THREE.Vector3(...gripJ.Y).normalize(), Z = new THREE.Vector3(...gripJ.Z).normalize();
-  sword.matrixAutoUpdate = false; swordBase.makeBasis(X, Y, Z); sword.matrix.copy(swordBase); bones['l_hand'].add(sword);
+  sword.matrixAutoUpdate = false; swordBase.makeBasis(X, Y, Z); swordBaseL.copy(swordBase); sword.matrix.copy(swordBase); bones['l_hand'].add(sword);
+  if (gripR) swordBaseR.makeBasis(new THREE.Vector3(...gripR.X).normalize(), new THREE.Vector3(...gripR.Y).normalize(), new THREE.Vector3(...gripR.Z).normalize());
   const mk = (color, r) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.92 })); m.renderOrder = 999; scene.add(m); return m; };
   ballMove = mk(0xff9a2e, 0.035); ballTip = mk(0x35d0ff, 0.028);
   for (const j of JOINTS) { const m = mk(0x3ddc84, 0.021); m.userData.joint = j; jballs.push(m); }
@@ -160,8 +168,9 @@ function buildUI() {
   document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => cam(b.dataset.cam));
   setupJointUI();
 }
+function handName() { return isAtk(clip) ? 'r_hand' : 'l_hand'; }
 function setClip(c) {
-  clip = c; frame = 0; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.clip === c));
+  clip = c; frame = 0; { const hn = handName(); if (sword.parent !== bones[hn]) bones[hn].add(sword); swordBase.copy(isAtk(c) ? swordBaseR : swordBaseL); } document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.clip === c));
   document.getElementById('curclip').textContent = CLIPS.find(x => x[0] === c)[1].toLowerCase(); document.getElementById('frame').max = clipsData.clips[c].n - 1; selAdj = null; syncUI(); renderJoints(); apply();
 }
 function syncUI() {
@@ -203,7 +212,7 @@ function placeBalls() {
   if (!ballMove) return; sword.updateWorldMatrix(true, false);
   ballMove.position.setFromMatrixPosition(sword.matrixWorld); ballTip.position.set(0, 0, 0.9).applyMatrix4(sword.matrixWorld);
   const showJ = document.getElementById('showJoints') ? document.getElementById('showJoints').checked : true;
-  for (const m of jballs) { const j = m.userData.joint; const b = bones[j[2]]; m.visible = showJ; if (b) m.position.copy(b.localToWorld(new THREE.Vector3(...(j[3] || [0, 0, 0])))); m.material.color.setHex(selJoint === j[0] ? 0xffe14d : 0x3ddc84); }
+  for (const m of jballs) { const j = m.userData.joint; const b = bones[j[2]]; m.visible = showJ && !isAtk(clip); if (b) m.position.copy(b.localToWorld(new THREE.Vector3(...(j[3] || [0, 0, 0])))); m.material.color.setHex(selJoint === j[0] ? 0xffe14d : 0x3ddc84); }
 }
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(), hit = new THREE.Vector3(), vTmp = new THREE.Vector3();
 function setupDrag() {
@@ -217,7 +226,7 @@ function setupDrag() {
   el.addEventListener('pointermove', e => {
     if (!drag) return; setNdc(e); if (!raycaster.ray.intersectPlane(plane, hit)) return;
     if (drag.userData.joint) { dragJoint(drag.userData.joint); return; }
-    const hand = bones['l_hand']; hand.updateWorldMatrix(true, false); const local = hand.worldToLocal(hit.clone());          // the dragged point in her left-hand bone frame (metres)
+    const hand = bones[handName()]; hand.updateWorldMatrix(true, false); const local = hand.worldToLocal(hit.clone());          // the dragged point in her left-hand bone frame (metres)
     const ed = edits[clip];
     if (drag === ballMove) {
       const p = [local.x * 100, local.y * 100, local.z * 100].map(v => Math.round(v * 2) / 2); ed.pos = p;
@@ -273,7 +282,7 @@ const tmp = new THREE.Vector3();
 function cam(kind) {
   const hip = bones['pelvis'].getWorldPosition(new THREE.Vector3()); const t = new THREE.Vector3(hip.x, 1.0, hip.z); controls.target.copy(t);
   const d = { front: [0, 0.2, -3.2], side: [3.2, 0.2, 0], back: [0, 0.2, 3.2], close: [-0.2, -0.4, -1.3] }[kind];
-  if (kind === 'close') { const h = bones['l_hand'].getWorldPosition(tmp.clone()); controls.target.copy(h); camera.position.set(h.x - 0.5, h.y + 0.1, h.z - 1.1); } else camera.position.set(t.x + d[0], t.y + d[1] + 0.3, t.z + d[2]);
+  if (kind === 'close') { const h = bones[handName()].getWorldPosition(tmp.clone()); controls.target.copy(h); camera.position.set(h.x - 0.5, h.y + 0.1, h.z - 1.1); } else camera.position.set(t.x + d[0], t.y + d[1] + 0.3, t.z + d[2]);
 }
 const clock = new THREE.Clock();
 function animate() {
