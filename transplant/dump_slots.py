@@ -106,6 +106,15 @@ def merged(n):
         off = len(d['pos']); uv = e['uv'].astype(np.float64).copy(); uv[:, 1] = 272.0 / 1024 + uv[:, 1] * 0.5            # trim atlas (alpha-masked) = next half
         for k in ('pos', 'nrm', 'jnt', 'wgt'): d[k] = np.concatenate([d[k], e[k]])
         d['uv'] = np.concatenate([d['uv'], uv]); d['idx'] = np.concatenate([d['idx'], e['idx'] + off]); d['al'] = np.concatenate([d['al'], np.full(len(e['pos']), 0 if d['al'].min() < 255 else 255, np.uint8)])
+    if n == 'cirith_hands_armor' and not hands:
+        # grip fit: Bannerlord puts the weapon in the palm of ITS hand; her hand sat ~5 cm closer to the wrist (floating above the grab point).
+        # Slide each hand along the arm direction so its proximal end matches the native hand's (measured against hands_female_a), plus the small perpendicular offset.
+        for sg in (1.0, -1.0):
+            m = d['pos'][:, 0] * sg > 0.3
+            a = np.array([sg * 0.83, 0.0, -0.55]); a /= np.linalg.norm(a)
+            delta = 0.052 * a + np.array([-0.009 * sg, 0.006, -0.013])
+            d['pos'][m] += delta
+        print('  grip fit: hands slid ~5 cm along the arm toward the grip point')
     return d
 slots = [(n, merged(n)) for n in ('cirith_body_armor', 'cirith_legs_armor', 'cirith_hands_armor', 'cirith_head_armor')]
 with open('out_rig/slots.bin', 'wb') as f:

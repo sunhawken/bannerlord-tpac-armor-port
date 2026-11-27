@@ -70,6 +70,8 @@ Check with a byte diff: re-serialize a vanilla stream and compare to the decompr
 - **The skeleton's rest arms point ~27 deg downward**, not T-pose. If your arms are modelled horizontal the hands float ~18 cm above the hand bones and
   weapons are not held. Fix: rotate each arm vertex about the upper-arm bone by the angle between your arm chain and the bone chain, scaled by the vertex's
   arm-bone weight (`angle_arms` in `transplant/dump_slots.py`). Hands then land within 1-3 cm of the hand bones.
+  Then do a **grip fit**: the engine puts the weapon in the palm of *its* hand, so compare your hand's proximal end with the native `hands_female_a` along the arm
+  direction and slide yours until they match (here ~5 cm) - otherwise the hand floats above the grab point.
 
 ### E. Texture + material
 - Alpha-masked parts (filigree, trims) need a **DXT5** texture and an alpha-tested material. Clone a vanilla one
