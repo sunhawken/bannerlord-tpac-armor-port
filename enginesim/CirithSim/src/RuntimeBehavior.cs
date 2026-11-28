@@ -92,6 +92,7 @@ namespace CirithSim
             }
             catch (Exception e) { SimSubModule.L("voice silence err " + e.Message); }
         }
+        readonly SimCommands simCmd = new SimCommands();
         string lastAct = "";
         void VoiceFromActions(Agent m)
         {
@@ -161,6 +162,7 @@ namespace CirithSim
                     int vi = (int)((life - 4f) / 1.2f); if (life > 4f && vi != lastVoice && vi < 12) { lastVoice = vi; var vt = new[] { SkinVoiceManager.VoiceType.Grunt, SkinVoiceManager.VoiceType.Jump, SkinVoiceManager.VoiceType.Yell, SkinVoiceManager.VoiceType.Pain, SkinVoiceManager.VoiceType.Death, SkinVoiceManager.VoiceType.Stun, SkinVoiceManager.VoiceType.Fear, SkinVoiceManager.VoiceType.Climb, SkinVoiceManager.VoiceType.Focus, SkinVoiceManager.VoiceType.Debacle, SkinVoiceManager.VoiceType.Victory, SkinVoiceManager.VoiceType.Drown }; try { m.MakeVoice(vt[vi], SkinVoiceManager.CombatVoiceNetworkPredictionType.NoPrediction); } catch (Exception ve) { SimSubModule.L("voice test err " + ve.Message); } }
                 }
                 if (m != null && m.IsActive()) { VoiceFromActions(m); SilenceVanilla(m); GripMeasure(m); }
+                simCmd.Tick(m, dt);
                 foreach (var a in Mission.Current.Agents)
                 {
                     if (a != null && a.IsActive() && a.AgentVisuals != null && WeaponAnim.IsWielding(a) || (a != null && wanim.ContainsKey(a))) { if (!wanim.TryGetValue(a, out var wa)) { wa = new WeaponAnim(); wanim[a] = wa; SimSubModule.L("runtime: weapon controller attached to " + (a.Name ?? "agent")); } wa.Update(a, dt); }

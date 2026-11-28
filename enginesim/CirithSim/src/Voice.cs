@@ -26,14 +26,18 @@ namespace CirithSim
             if (installed) return; installed = true;
             try
             {
-                var dir = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "voice");
-                if (!Directory.Exists(dir)) { SimSubModule.L("voice: no ModuleData/voice folder - nothing replaced"); return; }
-                foreach (var f in Directory.GetFiles(dir, "*.wav")) { var n = Path.GetFileNameWithoutExtension(f); int u = n.LastIndexOf('_'); if (u <= 0) continue; var t = n.Substring(0, u); if (!files.TryGetValue(t, out var l)) files[t] = l = new List<string>(); l.Add(f); }
-                SimSubModule.L("voice: " + files.Sum(k => k.Value.Count) + " clips for " + string.Join(",", files.Keys));
+                LoadFiles(); if (files.Count == 0) return;
                 if (!AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "0Harmony")) { SimSubModule.L("voice: Harmony not loaded - vanilla voice stays (load Bannerlord.Harmony before CirithSim)"); return; }
                 Patch();
             }
             catch (Exception e) { SimSubModule.L("voice install err " + e.Message); }
+        }
+        static void LoadFiles()
+        {
+            var dir = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "voice");
+            if (!Directory.Exists(dir)) { SimSubModule.L("voice: no ModuleData/voice folder - nothing replaced"); return; }
+            foreach (var f in Directory.GetFiles(dir, "*.wav")) { var n = Path.GetFileNameWithoutExtension(f); int u = n.LastIndexOf('_'); if (u <= 0) continue; var t = n.Substring(0, u); if (!files.TryGetValue(t, out var l)) files[t] = l = new List<string>(); l.Add(f); }
+            SimSubModule.L("voice: " + files.Sum(k => k.Value.Count) + " clips for " + string.Join(",", files.Keys));
         }
         [MethodImpl(MethodImplOptions.NoInlining)]
         static void Patch()
@@ -67,6 +71,7 @@ namespace CirithSim
             }
             catch (Exception e) { SimSubModule.L("voice prefix err " + e.Message); return true; }
         }
+        public static void Reload() { files.Clear(); LoadFiles(); }
         public static int Calls; static readonly HashSet<string> seen = new HashSet<string>();
         // event-driven voices (hit / death / attack / jump) for the player, independent of whether the engine goes through MakeVoice for them
         public static void Trigger(string type, string why)

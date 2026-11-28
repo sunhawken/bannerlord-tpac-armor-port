@@ -6,7 +6,7 @@
   usage:  .\run_engine_sim.ps1 [-Char cirith_test] [-Scene battle_terrain_a] [-ShotDelay 8] [-Timeout 150]
   output: enginesim\out\engine_<char>.png, enginesim\out\engine_<char>.log
 #>
-param([string]$Char = 'cirith_test', [string]$Scene = 'battle_terrain_a', [int]$ShotDelay = 8, [int]$Timeout = 150, [switch]$KeepOpen, [switch]$Visible, [string]$Views = '', [string]$ExtraModules = '', [string]$Pre = '', [string]$Modules = '')
+param([string]$Char = 'cirith_test', [string]$Scene = 'battle_terrain_a', [int]$ShotDelay = 8, [int]$Timeout = 150, [switch]$KeepOpen, [switch]$Visible, [string]$Views = '', [string]$ExtraModules = '', [string]$Pre = '', [string]$Modules = '', [switch]$Persist)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $game = 'T:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord'
@@ -41,6 +41,29 @@ public class Dsk {
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool CreateProcess(string app, string cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string cwd, ref STARTUPINFO si, out PROCESS_INFORMATION pi);
 }
 '@
+# the game shows a modal 'Mod change detected' box (OK = delete the shader cache) whenever the active mod list differs from the last launch; on a hidden desktop nobody sees it and the boot just sits there.
+Add-Type @'
+using System; using System.Text; using System.Runtime.InteropServices;
+public class Dlg {
+  public delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumDesktopWindows(IntPtr d, EnumProc p, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr h, EnumProc p, IntPtr l);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  public static int Dismiss(IntPtr desk) {
+    int n = 0; EnumProc top = (h, l) => {
+      var c = new StringBuilder(64); GetClassName(h, c, 64); if (c.ToString() != "#32770") return true;
+      var t = new StringBuilder(128); GetWindowText(h, t, 128); string ts = t.ToString();
+      if (ts.IndexOf("Mod change", StringComparison.OrdinalIgnoreCase) < 0 && ts.IndexOf("Safe Mode", StringComparison.OrdinalIgnoreCase) < 0) return true;
+      EnumChildWindows(h, (ch, l2) => { var cc = new StringBuilder(32); GetClassName(ch, cc, 32); if (cc.ToString() == "Button") { var tt = new StringBuilder(32); GetWindowText(ch, tt, 32); if (tt.ToString().Replace("&", "") == "OK" || tt.ToString().Replace("&", "") == "Yes") { SendMessage(ch, 0x00F5, IntPtr.Zero, IntPtr.Zero); n++; return false; } } return true; }, IntPtr.Zero);
+      return true; };
+    if (desk == IntPtr.Zero) EnumWindows(top, IntPtr.Zero); else EnumDesktopWindows(desk, top, IntPtr.Zero);
+    return n;
+  }
+}
+'@
 if ($Views) { $env:CIRITH_VIEWS = (Resolve-Path $Views).Path } else { $env:CIRITH_VIEWS = '' }
 Remove-Item (Join-Path $mod 'shots') -Recurse -Force -ErrorAction SilentlyContinue
 # --- launch
@@ -54,10 +77,32 @@ if ($Modules) { $mods = $Modules }
 $args = "/singleplayer _MODULES_*$mods*_MODULES_"
 if ($Visible) {
   $env:CIRITH_CHAR = $Char; $env:CIRITH_SCENE = $Scene; $env:CIRITH_NOCAM = '1'; $env:CIRITH_RUNTIME = '1'; $env:CIRITH_LIVE = '1'
+  if ($Persist) {
+    # persistent quiet sim: boots ONCE on the normal desktop, the window is pushed off-screen as soon as it exists and focus goes back to whatever you were using; talk to it with simctl.ps1
+    $env:CIRITH_SIMCMD = '1'; Remove-Item (Join-Path $mod 'simready.txt') -Force -ErrorAction SilentlyContinue
+    Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class WP {
+  [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i); [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr h, int i, int v); [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr h, uint k, byte a, uint f);
+  // invisible but 'on screen' (the engine keeps rendering and ticking): layered + click-through + tool window (no taskbar button), alpha 1/255
+  public static void Ghost(IntPtr h) { int ex = GetWindowLong(h, -20); SetWindowLong(h, -20, ex | 0x80000 | 0x20 | 0x80 | 0x08000000); SetLayeredWindowAttributes(h, 0, 1, 2); }
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f); }
+'@
+    $fg = [WP]::GetForegroundWindow()
+    $p = Start-Process -FilePath (Join-Path $bin 'Bannerlord.exe') -ArgumentList $args -WorkingDirectory $bin -PassThru
+    $sw = [Diagnostics.Stopwatch]::StartNew(); $moved = $false
+    while ($sw.Elapsed.TotalSeconds -lt 900 -and -not $p.HasExited) {
+      Start-Sleep -Milliseconds 400; $p.Refresh(); if ([Dlg]::Dismiss([IntPtr]::Zero) -gt 0) { Write-Host 'dismissed the Mod change detected box' }
+      if ($p.MainWindowHandle -ne [IntPtr]::Zero -and $p.MainWindowTitle -like 'Mount and Blade*') { [WP]::Ghost($p.MainWindowHandle); if (-not $moved) { [void][WP]::SetForegroundWindow($fg); $moved = $true } }
+      if (Test-Path (Join-Path $mod 'simready.txt')) { Write-Host ("persistent sim ready after {0:0} s (pid {1}). Use: .\simctl.ps1 'state'" -f $sw.Elapsed.TotalSeconds, $p.Id); return }
+    }
+    Write-Host 'persistent sim did NOT become ready (see Modules\CirithSim\cirithsim.log)'; return
+  }
   $p = Start-Process -FilePath (Join-Path $bin 'Bannerlord.exe') -ArgumentList $args -WorkingDirectory $bin -PassThru
   Write-Host "launched VISIBLE Bannerlord pid $($p.Id) - it will boot straight into the battle with $Char (free camera); close the game window when done"
   return
 }
+if ($Persist -and -not $Visible) { $env:CIRITH_SIMCMD = '1'; $env:CIRITH_RUNTIME = '1'; $env:CIRITH_LIVE = '1'; Remove-Item (Join-Path $mod 'simready.txt') -Force -ErrorAction SilentlyContinue }
 # run the game on its OWN hidden desktop: no window on the user's desktop, and it cannot grab the user's mouse/keyboard
 $deskName = "CirithSimDesk_" + [guid]::NewGuid().ToString('N').Substring(0,6)
 $desk = [Dsk]::CreateDesktopW($deskName, [IntPtr]::Zero, [IntPtr]::Zero, 0, 0x000F01FF, [IntPtr]::Zero)
@@ -77,6 +122,8 @@ public class W { [DllImport("user32.dll")] public static extern bool ShowWindow(
 $hidden = $false; if ($Views) { $shot = $true }; $sw = [Diagnostics.Stopwatch]::StartNew(); if (-not $Views) { $shot = $false } ; $found = $null
 while ($sw.Elapsed.TotalSeconds -lt $Timeout -and -not $p.HasExited) {
   Start-Sleep -Milliseconds 300
+  if ([Dlg]::Dismiss($desk) -gt 0) { Write-Host 'dismissed the Mod change detected box' }
+  if ($Persist -and (Test-Path (Join-Path $mod 'simready.txt'))) { if ($origCfg) { Set-Content $ecfg -Value $origCfg -NoNewline }; Set-CleanExit; Write-Host ('persistent sim ready after {0:0} s (pid {1}, hidden desktop). Use: .\simctl.ps1 state' -f $sw.Elapsed.TotalSeconds, $p.Id); return }
   Get-Process opera_crashreporter -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue      # auto-dismiss the game's crash dialog (it would otherwise pop up on the user's screen)
   # headless-style: the moment the game window exists, push it off-screen and hide it from the taskbar (rendering + in-engine screenshots keep working)
   if (-not $hidden) { $p.Refresh(); if ($p.MainWindowHandle -ne [IntPtr]::Zero) { [void][W]::SetWindowPos($p.MainWindowHandle, [IntPtr]::Zero, -32000, -32000, 0, 0, 0x0001 -bor 0x0004 -bor 0x0010); [void][W]::ShowWindow($p.MainWindowHandle, 0); $hidden = $true } }

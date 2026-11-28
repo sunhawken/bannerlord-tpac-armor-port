@@ -23,7 +23,7 @@ namespace CirithSim
         public static string ItemId => CirithVR.Active ? ItemVr : Item;
         public static InputKey SprintKey = InputKey.M;      // sprint = Ctrl + M held (M is bound to nothing in the game's key list; Ctrl is no game key either). CIRITH_SPRINTKEY / CIRITH_SPRINTMOD=none|ctrl|shift|alt override
         public static string SprintMod = "ctrl";
-        static bool SprintDown() { try { bool m = SprintMod == "none" || (SprintMod == "ctrl" && (Input.IsKeyDown(InputKey.LeftControl) || Input.IsKeyDown(InputKey.RightControl))) || (SprintMod == "shift" && (Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift))) || (SprintMod == "alt" && (Input.IsKeyDown(InputKey.LeftAlt) || Input.IsKeyDown(InputKey.RightAlt))); return m && Input.IsKeyDown(SprintKey); } catch { return false; } }
+        static bool SprintDown() { if (SimCommands.ForceSprint) return true; try { bool m = SprintMod == "none" || (SprintMod == "ctrl" && (Input.IsKeyDown(InputKey.LeftControl) || Input.IsKeyDown(InputKey.RightControl))) || (SprintMod == "shift" && (Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift))) || (SprintMod == "alt" && (Input.IsKeyDown(InputKey.LeftAlt) || Input.IsKeyDown(InputKey.RightAlt))); return m && Input.IsKeyDown(SprintKey); } catch { return false; } }
         const float SpeedMult = 1.5f;
 
         class Clip
@@ -130,6 +130,8 @@ namespace CirithSim
             if (want) Boost(me, WearsOutfit(me)); else if (boosted) Boost(me, false);
             Current = want ? State.Sprint : State.None;
         }
+        public bool IsBoosted { get { return boosted; } }
+        public void ReloadEdits() { edits.Clear(); editsR.Clear(); editsAtk.Clear(); LoadEdits(); }
         bool engineHold;
         // jump / fall: the engine's own animation must win while she is in the air (action type on either channel, or a vertical speed the ground never produces)
         static bool JumpLike(Agent a, float vz)
