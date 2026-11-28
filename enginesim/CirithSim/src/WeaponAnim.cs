@@ -21,7 +21,9 @@ namespace CirithSim
     {
         public const string Item = "cirith_sword", ItemVr = "cirith_sword_vr";
         public static string ItemId => CirithVR.Active ? ItemVr : Item;
-        public static InputKey SprintKey = InputKey.C;
+        public static InputKey SprintKey = InputKey.M;      // sprint = Ctrl + M held (M is bound to nothing in the game's key list; Ctrl is no game key either). CIRITH_SPRINTKEY / CIRITH_SPRINTMOD=none|ctrl|shift|alt override
+        public static string SprintMod = "ctrl";
+        static bool SprintDown() { try { bool m = SprintMod == "none" || (SprintMod == "ctrl" && (Input.IsKeyDown(InputKey.LeftControl) || Input.IsKeyDown(InputKey.RightControl))) || (SprintMod == "shift" && (Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift))) || (SprintMod == "alt" && (Input.IsKeyDown(InputKey.LeftAlt) || Input.IsKeyDown(InputKey.RightAlt))); return m && Input.IsKeyDown(SprintKey); } catch { return false; } }
         const float SpeedMult = 1.5f;
 
         class Clip
@@ -66,7 +68,7 @@ namespace CirithSim
                 SimSubModule.L($"weapon anim: clips loaded (idle {idle.N}, walk {walk.N}, run {run.N}, sprint {charge.N} frames @60 fps); natural speeds walk {walk.NatSpeed:0.00} run {run.NatSpeed:0.00} sprint {charge.NatSpeed:0.00} m/s");
                 try { var g = File.ReadAllText(Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip.txt")).Split(new[] { ' ', (char)10, (char)13 }, StringSplitOptions.RemoveEmptyEntries).Select(P).ToArray();
                       grip = new MatrixFrame(new Mat3(new Vec3(g[0], g[3], g[6]), new Vec3(g[1], g[4], g[7]), new Vec3(g[2], g[5], g[8])), Vec3.Zero); gripLoaded = true; LoadHull(); try { var fr = Path.Combine(Path.GetDirectoryName(SimSubModule.LogPath), "ModuleData", "cirith_grip_r.txt"); if (File.Exists(fr)) { var q = File.ReadAllText(fr).Split(new[] { ' ', (char)10, (char)13 }, StringSplitOptions.RemoveEmptyEntries).Select(P).ToArray(); gripR = new MatrixFrame(new Mat3(new Vec3(q[0], q[3], q[6]), new Vec3(q[1], q[4], q[7]), new Vec3(q[2], q[5], q[8])), Vec3.Zero); } } catch { } LoadEdits(); SimSubModule.L($"weapon grip frame loaded: blade in l_hand frame = {g[2]:0.000},{g[5]:0.000},{g[8]:0.000}"); } catch (Exception ge) { SimSubModule.L("grip load failed: " + ge.Message); }
-                var k = Environment.GetEnvironmentVariable("CIRITH_SPRINTKEY"); if (!string.IsNullOrEmpty(k) && Enum.TryParse(k, true, out InputKey kk)) SprintKey = kk;
+                var sm = Environment.GetEnvironmentVariable("CIRITH_SPRINTMOD"); if (!string.IsNullOrEmpty(sm)) SprintMod = sm.ToLowerInvariant(); var k = Environment.GetEnvironmentVariable("CIRITH_SPRINTKEY"); if (!string.IsNullOrEmpty(k) && Enum.TryParse(k, true, out InputKey kk)) SprintKey = kk;
             }
             catch (Exception e) { SimSubModule.L("weapon anim load failed: " + e.Message); }
         }
@@ -123,7 +125,7 @@ namespace CirithSim
             var raw = (pos - lastPos) / Math.Max(dt, 0.001f); raw.z = 0; if (dt > 0.1f || raw.Length > 12f) raw = Vec3.Zero; lastPos = pos; float k = 1f - (float)Math.Exp(-dt / 0.08f); vel = Vec3.Lerp(vel, raw, k);
             var look = me.LookDirection; look.z = 0; if (look.LengthSquared > 1e-6f) look.Normalize();
             float speed = vel.Length, fwd = Vec3.DotProduct(vel, look);
-            bool sprintHeld = me == Agent.Main && SafeKey(SprintKey); bool forward = fwd > 0.6f * Math.Max(speed, 0.001f) && speed > 0.2f;
+            bool sprintHeld = me == Agent.Main && SprintDown(); bool forward = fwd > 0.6f * Math.Max(speed, 0.001f) && speed > 0.2f;
             bool want = sprintHeld && forward && speed > 1.2f;
             if (want) Boost(me, WearsOutfit(me)); else if (boosted) Boost(me, false);
             Current = want ? State.Sprint : State.None;
@@ -164,7 +166,7 @@ namespace CirithSim
             var raw = (pos - lastPos) / Math.Max(dt, 0.001f); raw.z = 0; if (dt > 0.1f) raw = Vec3.Zero; lastPos = pos; float k = 1f - (float)Math.Exp(-dt / 0.08f); vel = Vec3.Lerp(vel, raw, k);
             var look = me.LookDirection; look.z = 0; if (look.LengthSquared > 1e-6f) look.Normalize();
             float speed = vel.Length, fwd = Vec3.DotProduct(vel, look);
-            bool sprintHeld = UseOverrides ? SprintHeldOverride : (me == Agent.Main && SafeKey(SprintKey));
+            bool sprintHeld = UseOverrides ? SprintHeldOverride : (me == Agent.Main && SprintDown());
             bool forward = fwd > 0.6f * Math.Max(speed, 0.001f) && speed > 0.2f;
             // ---- state machine (the engine's combat actions always win: no override while attacking / blocking)
             State want;
